@@ -10,6 +10,9 @@ from torchvision import transforms
 
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
+    print(f"Dataset location: {args.data_location}")
+    print(f"Expected path: {os.path.join(args.data_location, dataset_name.lower())}")
+
 
     # Define preprocessing transforms
     preprocess = transforms.Compose([
