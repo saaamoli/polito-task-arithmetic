@@ -20,12 +20,13 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
     # Load dataset with transforms
     dataset = get_dataset(
-        f"{dataset_name}Val",
-        preprocess=preprocess,
-        location=args.data_location,
-        batch_size=args.batch_size,
-        num_workers=2
+    dataset_name,
+    preprocess=preprocess,
+    location=os.path.join(args.data_location, dataset_name.lower()),
+    batch_size=args.batch_size,
+    num_workers=2
     )
+
     train_loader = get_dataloader(dataset, is_train=True, args=args)
 
     # Debugging: Print dataset details
