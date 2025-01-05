@@ -2,7 +2,7 @@
 # 2) eval single task
 # 3) task addition
 
-!python polito-task-arithmetic/finetune.py \
+python polito-task-arithmetic/finetune.py \
 --data-location=/kaggle/working/datasets/ \
 --save=/kaggle/working/checkpoints/ \
 --batch-size=32 \
