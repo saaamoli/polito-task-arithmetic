@@ -3,16 +3,18 @@
 # 3) task addition
 
 python finetune.py \
---data-location=/path/to/datasets/ \
---save=/path/to/save/ \
+--data-location=/content/drive/MyDrive/Task_Arithmetic_Datasets/datasets/ \
+--save=/content/drive/MyDrive/Task_Arithmetic_Checkpoints/ \
 --batch-size=32 \
 --lr=1e-4 \
---wd=0.0
+--wd=0.0 \
+--epochs=5 \
+--train-dataset=DTD
 
-python eval_single_task.py \
---data-location=/path/to/datasets/ \
---save=/path/to/save/
+#python eval_single_task.py \
+#--data-location=/content/drive/MyDrive/Task_Arithmetic_Datasets/datasets/ \
+#--save=/content/drive/MyDrive/Task_Arithmetic_Checkpoints/
 
-python eval_task_addition.py \
---data-location=/path/to/datasets/ \
---save=/path/to/save/
+#python eval_task_addition.py \
+#--data-location=/content/drive/MyDrive/Task_Arithmetic_Datasets/datasets/ \
+#--save=/content/drive/MyDrive/Task_Arithmetic_Checkpoints/
