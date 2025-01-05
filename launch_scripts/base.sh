@@ -7,9 +7,8 @@ python finetune.py \
 --save=/content/drive/MyDrive/Task_Arithmetic_Checkpoints/ \
 --batch-size=32 \
 --lr=1e-4 \
---wd=0.0 \
---epochs=5 \
---train-dataset=DTD
+--wd=0.0
+
 
 #python eval_single_task.py \
 #--data-location=/content/drive/MyDrive/Task_Arithmetic_Datasets/datasets/ \
