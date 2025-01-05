@@ -13,6 +13,10 @@ class DTD:
         traindir = os.path.join(location, 'dtd', 'train')
         valdir = os.path.join(location, 'dtd', 'val')
 
+        print(f"Train directory: {traindir}")
+        print(f"Validation directory: {valdir}")
+
+
         self.train_dataset = datasets.ImageFolder(
             traindir, transform=preprocess)
         self.train_loader = torch.utils.data.DataLoader(
