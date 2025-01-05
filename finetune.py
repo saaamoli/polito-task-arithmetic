@@ -24,14 +24,16 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"Dataset location passed to DTD: {os.path.join(args.data_location, dataset_name.lower())}")
 
     # Load dataset with transforms
-    dataset = get_dataset(
-    dataset_name,
-    preprocess=preprocess,
-    location=os.path.join(args.data_location, dataset_name.lower()),
-    batch_size=args.batch_size,
-    num_workers=2
-    )
+    dataset_path = os.path.join(args.data_location, dataset_name.lower())
+    print(f"Resolved dataset path: {dataset_path}")
 
+    dataset = get_dataset(
+        dataset_name,
+        preprocess=preprocess,
+        location=dataset_path,
+        batch_size=args.batch_size,
+        num_workers=2
+    )
     train_loader = get_dataloader(dataset, is_train=True, args=args)
 
     # Debugging: Print dataset details
