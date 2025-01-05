@@ -7,6 +7,9 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
+import sys
+sys.path.append('/kaggle/working/polito-task-arithmetic')
+
 
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
