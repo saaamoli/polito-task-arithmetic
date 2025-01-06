@@ -15,6 +15,29 @@ from args import parse_arguments
 from torchvision import transforms
 
 
+def resolve_dataset_path(args, dataset_name):
+    """
+    Dynamically resolve dataset paths based on dataset names.
+    """
+    base_path = args.data_location
+    dataset_name_lower = dataset_name.lower()
+
+    if dataset_name_lower == "dtd":
+        return os.path.join(base_path, "dtd")
+    elif dataset_name_lower == "eurosat":
+        return os.path.join(base_path, "EuroSAT_splits")
+    elif dataset_name_lower == "mnist":
+        return os.path.join(base_path, "MNIST", "raw")
+    elif dataset_name_lower == "gtsrb":
+        return os.path.join(base_path, "gtsrb")
+    elif dataset_name_lower == "resisc45":
+        return os.path.join(base_path, "resisc45")
+    elif dataset_name_lower == "svhn":
+        return os.path.join(base_path, "svhn")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+
+
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
 
@@ -32,17 +55,14 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     ])
 
     # Resolve dataset path
-    dataset_path = os.path.join(args.data_location, dataset_name.lower())
+    dataset_path = resolve_dataset_path(args, dataset_name)
     print(f"Resolved dataset path: {dataset_path}")
-
-    # Update args to pass the resolved dataset path
-    args.data_location = dataset_path
 
     # Load dataset with transforms
     dataset = get_dataset(
         f"{dataset_name}Val",
         preprocess=preprocess,
-        location=args.data_location,
+        location=dataset_path,
         batch_size=args.batch_size,
         num_workers=2
     )
