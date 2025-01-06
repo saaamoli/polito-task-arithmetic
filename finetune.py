@@ -3,6 +3,7 @@ import time
 import torch
 import sys
 sys.path.append('/kaggle/working/polito-task-arithmetic')
+print("Python Path:", sys.path)
 from datasets.common import get_dataloader, maybe_dictionarize
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
