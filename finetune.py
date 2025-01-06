@@ -23,19 +23,26 @@ def resolve_dataset_path(args, dataset_name):
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
+        # DTD expects "dtd" folder structure.
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
+        # EuroSAT uses "EuroSAT_splits" directory.
         return os.path.join(base_path, "EuroSAT_splits")
     elif dataset_name_lower == "mnist":
+        # MNIST uses the "raw" directory under "MNIST".
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
+        # GTSRB appends "gtsrb/GTSRB/Training" or "gtsrb/GTSRB/Final_Test/Images".
         return os.path.join(base_path, "gtsrb")
     elif dataset_name_lower == "resisc45":
+        # RESISC45 uses "resisc45/NWPU-RESISC45" under "resisc45".
         return os.path.join(base_path, "resisc45")
     elif dataset_name_lower == "svhn":
+        # SVHN expects "svhn" subdirectory.
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
 
 
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
@@ -61,15 +68,18 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
         val_dir = os.path.join(dataset_path, "val")
         print(f"Train directory for EuroSAT: {train_dir}")
         print(f"Validation directory for EuroSAT: {val_dir}")
-
-        if not os.path.exists(train_dir) or not os.path.exists(val_dir):
-            raise FileNotFoundError(f"EuroSAT dataset directories not found: {train_dir}, {val_dir}")
-
-        # Use `dataset_path` without altering it
-        args.data_location = dataset_path
-    else:
-        args.data_location = dataset_path
-
+        dataset_path = train_dir
+    elif dataset_name.lower() == "gtsrb":
+        train_dir = os.path.join(dataset_path, "GTSRB/Training")
+        val_dir = os.path.join(dataset_path, "GTSRB/Final_Test/Images")
+        print(f"Train directory for GTSRB: {train_dir}")
+        print(f"Validation directory for GTSRB: {val_dir}")
+        dataset_path = train_dir
+    elif dataset_name.lower() == "resisc45":
+        train_dir = os.path.join(dataset_path, "NWPU-RESISC45")
+        print(f"Train directory for RESISC45: {train_dir}")
+        dataset_path = train_dir
+    args.data_location = dataset_path
     print(f"Resolved dataset path: {args.data_location}")
 
     # Load dataset with transforms
