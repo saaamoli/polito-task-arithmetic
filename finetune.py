@@ -32,7 +32,9 @@ def resolve_dataset_path(args, dataset_name):
     elif dataset_name_lower == "gtsrb":
         return os.path.join(base_path, "gtsrb")
     elif dataset_name_lower == "resisc45":
-        return os.path.join(base_path, "resisc45")
+        resolved_path = os.path.join(base_path, "resisc45")  # Correct single-level nesting
+        print(f"Base dataset path for RESISC45: {resolved_path}")
+        return resolved_path
     elif dataset_name_lower == "svhn":
         return os.path.join(base_path, "svhn")
     else:
@@ -75,6 +77,10 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
         val_dir = os.path.join(base_dataset_path, "val")
         print(f"Train directory for EuroSAT: {train_dir}")
         print(f"Validation directory for EuroSAT: {val_dir}")
+    elif dataset_name_lower == "resisc45":
+        resolved_path = os.path.join(base_path, "resisc45")
+        print(f"Base dataset path for RESISC45: {resolved_path}")
+        return resolved_path
     else:
         train_dir = base_dataset_path
 
