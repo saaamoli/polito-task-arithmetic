@@ -18,6 +18,12 @@ from torchvision import transforms
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
 
+    # Check if the checkpoint already exists
+    checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
+    if os.path.exists(checkpoint_path):
+        print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
+        return
+
     # Define preprocessing transforms
     preprocess = transforms.Compose([
         transforms.Resize((224, 224)),
@@ -27,8 +33,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
     # Resolve dataset path
     dataset_path = os.path.join(args.data_location, dataset_name.lower())
-    if dataset_name.lower() == "dtd":
-        dataset_path = os.path.join(args.data_location, "dtd")
     print(f"Resolved dataset path: {dataset_path}")
 
     # Update args to pass the resolved dataset path
