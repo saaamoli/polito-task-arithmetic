@@ -23,25 +23,21 @@ def resolve_dataset_path(args, dataset_name):
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        # DTD expects "dtd" folder structure.
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        # EuroSAT uses "EuroSAT_splits" directory.
-        return os.path.join(base_path, "EuroSAT_splits")
+        # Only pass the base path up to datasets, as EuroSATBase appends 'EuroSAT_splits' internally
+        return base_path
     elif dataset_name_lower == "mnist":
-        # MNIST uses the "raw" directory under "MNIST".
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
-        # GTSRB appends "gtsrb/GTSRB/Training" or "gtsrb/GTSRB/Final_Test/Images".
         return os.path.join(base_path, "gtsrb")
     elif dataset_name_lower == "resisc45":
-        # RESISC45 uses "resisc45/NWPU-RESISC45" under "resisc45".
         return os.path.join(base_path, "resisc45")
     elif dataset_name_lower == "svhn":
-        # SVHN expects "svhn" subdirectory.
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
 
 
 
