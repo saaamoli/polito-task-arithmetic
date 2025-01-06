@@ -24,9 +24,13 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
     # Resolve dataset path
     if dataset_name.lower() == "dtd":
-        dataset_path = os.path.join(args.data_location, "dtd")  # Special case for DTD
+        dataset_path = os.path.join(args.data_location, "dtd")
+        train_dir = os.path.join(dataset_path, "train")
+        val_dir = os.path.join(dataset_path, "val")
     else:
-        dataset_path = os.path.join(args.data_location, dataset_name.lower())  # Generic case
+        dataset_path = os.path.join(args.data_location, dataset_name.lower())
+        train_dir = os.path.join(dataset_path, "train")
+        val_dir = os.path.join(dataset_path, "val")
  
     print(f"Resolved dataset path: {dataset_path}")
 
