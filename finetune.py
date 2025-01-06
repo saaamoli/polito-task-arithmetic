@@ -2,8 +2,11 @@ import os
 import time
 import torch
 import sys
+
+# Add project root to Python path
 sys.path.append('/kaggle/working/polito-task-arithmetic')
 print("Python Path:", sys.path)
+
 from datasets.common import get_dataloader, maybe_dictionarize
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
@@ -25,17 +28,17 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     # Resolve dataset path
     dataset_path = os.path.join(args.data_location, dataset_name.lower())
     if dataset_name.lower() == "dtd":
-        dataset_path = os.path.join(args.data_location, "dtd")  # Special case for DTD
-    else:
-        dataset_path = os.path.join(args.data_location, dataset_name.lower())  # Generic case
- 
+        dataset_path = os.path.join(args.data_location, "dtd")
     print(f"Resolved dataset path: {dataset_path}")
+
+    # Update args to pass the resolved dataset path
+    args.data_location = dataset_path
 
     # Load dataset with transforms
     dataset = get_dataset(
         f"{dataset_name}Val",
         preprocess=preprocess,
-        location=dataset_path,
+        location=args.data_location,
         batch_size=args.batch_size,
         num_workers=2
     )
@@ -84,6 +87,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     model.image_encoder.save(save_path)
     print(f"Fine-tuned model saved to {save_path}")
     print(f"Time taken for {dataset_name}: {time.time() - start_time:.2f}s\n")
+
 
 if __name__ == "__main__":
     args = parse_arguments()
