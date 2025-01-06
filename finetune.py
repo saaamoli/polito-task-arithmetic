@@ -57,21 +57,22 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     # Resolve dataset path
     dataset_path = resolve_dataset_path(args, dataset_name)
     print(f"Resolved dataset path: {dataset_path}")
+    
+    # For EuroSAT, explicitly set train/val directories
     if dataset_name.lower() == "eurosat":
-        # Use the correct subdirectories for EuroSAT
         train_dir = os.path.join(dataset_path, "train")
         val_dir = os.path.join(dataset_path, "val")
         print(f"Train directory for EuroSAT: {train_dir}")
         print(f"Validation directory for EuroSAT: {val_dir}")
-        args.data_location = dataset_path  # Update args with the base path
+        args.data_location = dataset_path  # Base path
     else:
-        args.data_location = dataset_path  # General case for other datasets
+        args.data_location = dataset_path  # General case
 
     # Load dataset with transforms
     dataset = get_dataset(
         f"{dataset_name}Val",
         preprocess=preprocess,
-        location=args.data_location,
+        location=dataset_path,
         batch_size=args.batch_size,
         num_workers=2
     )
