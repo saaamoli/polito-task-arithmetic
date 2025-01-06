@@ -62,31 +62,27 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     ])
 
     # Resolve dataset path
-    dataset_path = resolve_dataset_path(args, dataset_name)
+    base_dataset_path = resolve_dataset_path(args, dataset_name)
+    print(f"Base dataset path for {dataset_name}: {base_dataset_path}")
+
+    # For EuroSAT, manually set the base path without appending 'train' or 'val'
     if dataset_name.lower() == "eurosat":
-        train_dir = os.path.join(dataset_path, "train")
-        val_dir = os.path.join(dataset_path, "val")
+        train_dir = os.path.join(base_dataset_path, "train")
+        val_dir = os.path.join(base_dataset_path, "val")
         print(f"Train directory for EuroSAT: {train_dir}")
         print(f"Validation directory for EuroSAT: {val_dir}")
-        dataset_path = train_dir
-    elif dataset_name.lower() == "gtsrb":
-        train_dir = os.path.join(dataset_path, "GTSRB/Training")
-        val_dir = os.path.join(dataset_path, "GTSRB/Final_Test/Images")
-        print(f"Train directory for GTSRB: {train_dir}")
-        print(f"Validation directory for GTSRB: {val_dir}")
-        dataset_path = train_dir
-    elif dataset_name.lower() == "resisc45":
-        train_dir = os.path.join(dataset_path, "NWPU-RESISC45")
-        print(f"Train directory for RESISC45: {train_dir}")
-        dataset_path = train_dir
-    args.data_location = dataset_path
-    print(f"Resolved dataset path: {args.data_location}")
+    else:
+        train_dir = base_dataset_path
+
+    # Update args.data_location to base path
+    args.data_location = base_dataset_path
+    print(f"Resolved dataset path for {dataset_name}: {args.data_location}")
 
     # Load dataset with transforms
     dataset = get_dataset(
         f"{dataset_name}Val",
         preprocess=preprocess,
-        location=args.data_location,
+        location=args.data_location,  # Use the base path, not 'train' or 'val'
         batch_size=args.batch_size,
         num_workers=2
     )
@@ -135,6 +131,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     model.image_encoder.save(save_path)
     print(f"Fine-tuned model saved to {save_path}")
     print(f"Time taken for {dataset_name}: {time.time() - start_time:.2f}s\n")
+
 
 
 if __name__ == "__main__":
