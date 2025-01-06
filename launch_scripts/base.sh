@@ -1,6 +1,8 @@
 # 1) finetune on all datasets
 # 2) eval single task
 # 3) task addition
+pwd
+ls -la
 
 python /kaggle/working/polito-task-arithmetic/finetune.py \
 --data-location=/kaggle/working/datasets/ \
