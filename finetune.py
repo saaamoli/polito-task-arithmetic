@@ -56,12 +56,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
     # Resolve dataset path
     dataset_path = resolve_dataset_path(args, dataset_name)
-    if dataset_name.lower() == "eurosat":
-        train_dir = os.path.join(dataset_path, "train")
-        val_dir = os.path.join(dataset_path, "val")
-        print(f"Train directory for EuroSAT: {train_dir}")
-        print(f"Validation directory for EuroSAT: {val_dir}")
-        dataset_path = train_dir  # Update to train path
     args.data_location = dataset_path  # Update args with resolved path
     print(f"Resolved dataset path: {dataset_path}")
 
