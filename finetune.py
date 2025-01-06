@@ -61,23 +61,22 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
         val_dir = os.path.join(dataset_path, "val")
         print(f"Train directory for EuroSAT: {train_dir}")
         print(f"Validation directory for EuroSAT: {val_dir}")
-        # Additional print for debugging
-        if not os.path.exists(train_dir):
-            print(f"ERROR: Train directory {train_dir} does not exist!")
-        if not os.path.exists(val_dir):
-            print(f"ERROR: Validation directory {val_dir} does not exist!")
-        dataset_path = train_dir  # Update to train path
-    args.data_location = dataset_path  # Update args with resolved path
-    print(f"Resolved dataset path: {dataset_path}")
 
-    # Additional debug print for confirming paths before dataset loading
-    print(f"Final dataset path being passed to get_dataset: {args.data_location}")
+        if not os.path.exists(train_dir) or not os.path.exists(val_dir):
+            raise FileNotFoundError(f"EuroSAT dataset directories not found: {train_dir}, {val_dir}")
+
+        # Use `dataset_path` without altering it
+        args.data_location = dataset_path
+    else:
+        args.data_location = dataset_path
+
+    print(f"Resolved dataset path: {args.data_location}")
 
     # Load dataset with transforms
     dataset = get_dataset(
         f"{dataset_name}Val",
         preprocess=preprocess,
-        location=dataset_path,
+        location=args.data_location,
         batch_size=args.batch_size,
         num_workers=2
     )
