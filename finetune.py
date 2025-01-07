@@ -25,7 +25,6 @@ def resolve_dataset_path(args, dataset_name):
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        # Only pass the base path up to datasets, as EuroSATBase appends 'EuroSAT_splits' internally
         return base_path
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
@@ -37,8 +36,6 @@ def resolve_dataset_path(args, dataset_name):
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
-
-
 
 
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
@@ -77,11 +74,12 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     dataset = get_dataset(
         f"{dataset_name}Val",
         preprocess=preprocess,
-        location=args.data_location,  # Use the base path, not 'train' or 'val'
+        location=args.data_location,
         batch_size=args.batch_size,
         num_workers=2
     )
     train_loader = get_dataloader(dataset, is_train=True, args=args)
+    val_loader = get_dataloader(dataset, is_train=False, args=args)  # Add validation loader
 
     # Debugging: Print dataset details
     dataset_size = len(dataset.train_dataset) if hasattr(dataset, "train_dataset") else len(dataset)
@@ -90,6 +88,12 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
     # Load pre-trained model
     encoder = ImageEncoder(args).cuda()
+    pretrained_encoder_path = f"/kaggle/input/checkpoints/{dataset_name}_pretrained.pt"
+    if not os.path.exists(pretrained_encoder_path):
+        raise FileNotFoundError(f"Pre-trained encoder not found: {pretrained_encoder_path}")
+    encoder.load_state_dict(torch.load(pretrained_encoder_path))
+    print(f"Loaded pre-trained weights from {pretrained_encoder_path}")
+
     head = get_classification_head(args, f"{dataset_name}Val").cuda()
     model = ImageClassifier(encoder, head).cuda()
     model.freeze_head()
@@ -120,14 +124,30 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
         print(f"\nEpoch {epoch + 1} completed. Average Loss: {epoch_loss / len(train_loader):.4f}")
 
+        # Validation phase
+        model.eval()
+        with torch.no_grad():
+            val_loss = 0.0
+            correct = 0
+            total = 0
+            for batch in val_loader:
+                data = maybe_dictionarize(batch)
+                inputs, labels = data["images"].cuda(), data["labels"].cuda()
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+            val_accuracy = correct / total
+            print(f"Validation Loss: {val_loss / len(val_loader):.4f}, Accuracy: {val_accuracy:.4%}")
+
     # Save the fine-tuned encoder
     save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(save_path)
     print(f"Fine-tuned model saved to {save_path}")
     print(f"Time taken for {dataset_name}: {time.time() - start_time:.2f}s\n")
-
-
 
 
 if __name__ == "__main__":
