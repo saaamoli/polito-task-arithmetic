@@ -14,7 +14,6 @@ from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
 
-
 def resolve_dataset_path(args, dataset_name):
     """
     Dynamically resolve dataset paths based on dataset names.
@@ -37,10 +36,9 @@ def resolve_dataset_path(args, dataset_name):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
-    
+
     # Check if the checkpoint already exists
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
@@ -51,7 +49,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     if dataset_name.lower() == "mnist":
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
-            transforms.Grayscale(num_output_channels=3),
+            transforms.Grayscale(num_output_channels=3),  # Convert grayscale to RGB
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -74,7 +72,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     dataset = get_dataset(
         f"{dataset_name}Val",
         preprocess=preprocess,
-        location=args.data_location,
+        location=args.data_location,  # Use the base path, not 'train' or 'val'
         batch_size=args.batch_size,
         num_workers=2
     )
@@ -88,18 +86,12 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     # Load pre-trained model
     print(f"Loading pre-trained encoder for {dataset_name}...")
     encoder = ImageEncoder(args).cuda()
-    if not hasattr(encoder.model, "transformer"):
-        print(f"WARNING: Encoder might not be pre-trained. Check your args.model: {args.model}")
-
-    # Load classification head
     head = get_classification_head(args, f"{dataset_name}Val").cuda()
-
-    # Combine encoder and head into a classifier
     model = ImageClassifier(encoder, head).cuda()
     model.freeze_head()
 
     # Define optimizer and loss
-    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, weight_decay=args.wd)  # Fixed learning rate
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.wd)
     criterion = torch.nn.CrossEntropyLoss()
 
     # Fine-tuning loop
@@ -131,9 +123,14 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"Fine-tuned model saved to {save_path}")
     print(f"Time taken for {dataset_name}: {time.time() - start_time:.2f}s\n")
 
-
 if __name__ == "__main__":
     args = parse_arguments()
+
+    # Ensure save directory is set
+    if args.save is None:
+        args.save = "/kaggle/working/checkpoints"
+        print(f"Default save directory set to {args.save}")
+
     dataset_epochs = {
         "DTD": 76,
         "EuroSAT": 12,
