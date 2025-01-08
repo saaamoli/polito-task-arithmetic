@@ -51,7 +51,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     if dataset_name.lower() == "mnist":
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
-            transforms.Grayscale(num_output_channels=3),  # Convert grayscale to RGB
+            transforms.Grayscale(num_output_channels=3),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -79,7 +79,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
         num_workers=2
     )
     train_loader = get_dataloader(dataset, is_train=True, args=args)
-    val_loader = get_dataloader(dataset, is_train=False, args=args)  # Add validation loader
 
     # Debugging: Print dataset details
     dataset_size = len(dataset.train_dataset) if hasattr(dataset, "train_dataset") else len(dataset)
@@ -87,19 +86,20 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"Batch size: {args.batch_size}")
 
     # Load pre-trained model
+    print(f"Loading pre-trained encoder for {dataset_name}...")
     encoder = ImageEncoder(args).cuda()
-    pretrained_encoder_path = f"/kaggle/input/checkpoints/{dataset_name}_pretrained.pt"
-    if not os.path.exists(pretrained_encoder_path):
-        raise FileNotFoundError(f"Pre-trained encoder not found: {pretrained_encoder_path}")
-    encoder.load_state_dict(torch.load(pretrained_encoder_path))
-    print(f"Loaded pre-trained weights from {pretrained_encoder_path}")
+    if not hasattr(encoder.model, "transformer"):
+        print(f"WARNING: Encoder might not be pre-trained. Check your args.model: {args.model}")
 
+    # Load classification head
     head = get_classification_head(args, f"{dataset_name}Val").cuda()
+
+    # Combine encoder and head into a classifier
     model = ImageClassifier(encoder, head).cuda()
     model.freeze_head()
 
     # Define optimizer and loss
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.wd)
+    optimizer = torch.optim.SGD(model.parameters(), lr=1e-4, weight_decay=args.wd)  # Fixed learning rate
     criterion = torch.nn.CrossEntropyLoss()
 
     # Fine-tuning loop
@@ -123,24 +123,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
             print(f"Batch {batch_idx + 1}/{len(train_loader)}: Loss = {loss.item():.4f}, Time = {time.time() - batch_start:.2f}s", end="\r")
 
         print(f"\nEpoch {epoch + 1} completed. Average Loss: {epoch_loss / len(train_loader):.4f}")
-
-        # Validation phase
-        model.eval()
-        with torch.no_grad():
-            val_loss = 0.0
-            correct = 0
-            total = 0
-            for batch in val_loader:
-                data = maybe_dictionarize(batch)
-                inputs, labels = data["images"].cuda(), data["labels"].cuda()
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-                val_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += labels.size(0)
-                correct += (predicted == labels).sum().item()
-            val_accuracy = correct / total
-            print(f"Validation Loss: {val_loss / len(val_loader):.4f}, Accuracy: {val_accuracy:.4%}")
 
     # Save the fine-tuned encoder
     save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
