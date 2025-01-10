@@ -9,9 +9,6 @@ from torchvision import transforms
 
 
 def load_finetuned_model(args, dataset_name):
-    """
-    Load the fine-tuned encoder and the classification head for the given dataset.
-    """
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
 
     if not os.path.exists(encoder_checkpoint_path):
@@ -19,7 +16,6 @@ def load_finetuned_model(args, dataset_name):
         return None
 
     print(f"✅ Loading checkpoint for {dataset_name} from {encoder_checkpoint_path}")
-
     encoder = torch.load(encoder_checkpoint_path, map_location="cuda")
     head = get_classification_head(args, dataset_name).cuda()
     model = ImageClassifier(encoder, head).cuda()
@@ -51,9 +47,6 @@ def resolve_dataset_path(args, dataset_name):
 
 
 def evaluate_model(model, dataloader):
-    """
-    Evaluates the model and calculates accuracy.
-    """
     correct, total = 0, 0
     model.eval()
     with torch.no_grad():
@@ -74,9 +67,6 @@ def evaluate_model(model, dataloader):
 
 
 def save_results(results, save_path):
-    """
-    Saves evaluation results to a JSON file.
-    """
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, 'w') as f:
         json.dump(results, f, indent=4)
@@ -84,9 +74,6 @@ def save_results(results, save_path):
 
 
 def evaluate_and_save(args, dataset_name):
-    """
-    Evaluates the model and saves results.
-    """
     save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
     if os.path.exists(save_path):
         print(f"✅ Results for {dataset_name} already exist. Skipping...")
