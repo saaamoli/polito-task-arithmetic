@@ -57,6 +57,7 @@ def resolve_dataset_path(args, dataset_name):
 
 
 
+
 def evaluate_model(model, dataloader):
     """
     Evaluates the model on the provided DataLoader and calculates accuracy.
