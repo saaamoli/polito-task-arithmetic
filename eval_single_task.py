@@ -5,6 +5,8 @@ from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
+from torchvision import transforms
+
 
 def load_finetuned_model(args, dataset_name):
     """
@@ -19,10 +21,6 @@ def load_finetuned_model(args, dataset_name):
     # ✅ Load the fine-tuned encoder
     encoder = torch.load(encoder_checkpoint_path).cuda()
 
-    # ✅ Correct dataset path for classification head
-    dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = dataset_path  # Force correct dataset path
-
     # ✅ Load the classification head for the dataset
     head = get_classification_head(args, dataset_name).cuda()
     
@@ -30,7 +28,6 @@ def load_finetuned_model(args, dataset_name):
     model = ImageClassifier(encoder, head).cuda()
     
     return model
-
 
 
 def resolve_dataset_path(args, dataset_name):
@@ -43,7 +40,7 @@ def resolve_dataset_path(args, dataset_name):
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Corrected path
+        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Correct path for EuroSAT
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
@@ -54,7 +51,6 @@ def resolve_dataset_path(args, dataset_name):
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
-
 
 
 def evaluate_model(model, dataloader):
@@ -82,7 +78,6 @@ def evaluate_model(model, dataloader):
     return accuracy
 
 
-
 def save_results(results, save_path):
     """
     Saves evaluation results to a JSON file.
@@ -90,22 +85,27 @@ def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, 'w') as f:
         json.dump(results, f, indent=4)
-    print(f"Results saved to {save_path}")
+    print(f"✅ Results saved to {save_path}")
 
-
-from torchvision import transforms
 
 def evaluate_and_save(args, dataset_name):
     """
     Evaluates the fine-tuned model on validation and test datasets and saves the results.
     """
+    # ✅ Check if results already exist
+    save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
+    if os.path.exists(save_path):
+        print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
+        return  # Skip evaluation if results already exist
+
     dataset_path = resolve_dataset_path(args, dataset_name)
+    args.data_location = dataset_path  # Ensure correct dataset path
 
     # ✅ Define preprocessing transforms
     preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),  # Resize to model input size
-        transforms.ToTensor(),          # Convert images to tensors
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],  # Standard normalization
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
 
@@ -129,10 +129,7 @@ def evaluate_and_save(args, dataset_name):
     }
 
     # ✅ Save results
-    save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
     save_results(results, save_path)
-
-
 
 
 def main():
