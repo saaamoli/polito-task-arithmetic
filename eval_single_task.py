@@ -8,7 +8,7 @@ from args import parse_arguments
 
 def load_finetuned_model(args, dataset_name):
     """
-    Loads the fine-tuned encoder and the classification head for the given dataset.
+    Load the fine-tuned encoder and the classification head for the given dataset.
     """
     # ✅ Path to the fine-tuned encoder checkpoint
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
@@ -16,8 +16,12 @@ def load_finetuned_model(args, dataset_name):
     if not os.path.exists(encoder_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
     
-    # ✅ Load the fine-tuned encoder directly
+    # ✅ Load the fine-tuned encoder
     encoder = torch.load(encoder_checkpoint_path).cuda()
+
+    # ✅ Correct dataset path for classification head
+    dataset_path = resolve_dataset_path(args, dataset_name)
+    args.data_location = dataset_path  # Force correct dataset path
 
     # ✅ Load the classification head for the dataset
     head = get_classification_head(args, dataset_name).cuda()
@@ -26,6 +30,7 @@ def load_finetuned_model(args, dataset_name):
     model = ImageClassifier(encoder, head).cuda()
     
     return model
+
 
 
 def resolve_dataset_path(args, dataset_name):
