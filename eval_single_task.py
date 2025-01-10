@@ -21,7 +21,8 @@ def load_finetuned_model(args, dataset_name):
 
     # ✅ Correct dataset path for classification head
     dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = dataset_path  # Force correct dataset path
+    args.data_location = dataset_path  # ✅ Add this line to fix dataset path
+
 
     # ✅ Load the classification head for the dataset
     head = get_classification_head(args, dataset_name).cuda()
