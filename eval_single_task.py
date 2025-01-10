@@ -83,15 +83,24 @@ def save_results(results, save_path):
     print(f"Results saved to {save_path}")
 
 
+from torchvision import transforms
+
 def evaluate_and_save(args, dataset_name):
     """
     Evaluates the fine-tuned model on validation and test datasets and saves the results.
     """
     dataset_path = resolve_dataset_path(args, dataset_name)
-    print(f"✅ Evaluating {dataset_name} using dataset path: {dataset_path}")
 
-    # ✅ Load validation and test datasets
-    dataset = get_dataset(f"{dataset_name}Val", None, dataset_path, args.batch_size)
+    # ✅ Define preprocessing transforms
+    preprocess = transforms.Compose([
+        transforms.Resize((224, 224)),  # Resize to model input size
+        transforms.ToTensor(),          # Convert images to tensors
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],  # Standard normalization
+                             std=[0.229, 0.224, 0.225])
+    ])
+
+    # ✅ Load validation and test datasets with proper transforms
+    dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
     val_loader = dataset.train_loader
     test_loader = dataset.test_loader
 
@@ -112,6 +121,8 @@ def evaluate_and_save(args, dataset_name):
     # ✅ Save results
     save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
     save_results(results, save_path)
+
+
 
 
 def main():
