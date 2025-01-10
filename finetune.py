@@ -1,22 +1,30 @@
 import os
-import json
+import time
 import torch
+import sys
+
+# Add project root to Python path
+sys.path.append('/kaggle/working/polito-task-arithmetic')
+print("Python Path:", sys.path)
+
+from datasets.common import get_dataloader, maybe_dictionarize
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
+from torchvision import transforms
 
 def resolve_dataset_path(args, dataset_name):
     """
-    Consistent dataset path resolution (matching fine-tuning logic).
+    Dynamically resolve dataset paths based on dataset names.
     """
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")  # Correct path to DTD dataset
+        return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return base_path
+        return base_path 
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
@@ -28,90 +36,111 @@ def resolve_dataset_path(args, dataset_name):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-def load_finetuned_model(args, dataset_name):
-    """
-    Load fine-tuned encoder and classification head.
-    """
-    encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
+def fine_tune_on_dataset(args, dataset_name, num_epochs):
+    print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
 
-    if not os.path.exists(encoder_checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
+    # Check if the checkpoint already exists
+    checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
+    if os.path.exists(checkpoint_path):
+        print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
+        return
 
-    # Load the fine-tuned encoder
-    encoder = torch.load(encoder_checkpoint_path).cuda()
+    # Define preprocessing transforms
+    if dataset_name.lower() == "mnist":
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(num_output_channels=3),  # Convert grayscale to RGB
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
-    # Fix: Pass the correct dataset path to the classification head
-    dataset_path = resolve_dataset_path(args, dataset_name)
+    # Resolve dataset path
+    base_dataset_path = resolve_dataset_path(args, dataset_name)
+    print(f"Base dataset path for {dataset_name}: {base_dataset_path}")
 
-    # Load the classification head
-    head = get_classification_head(args, dataset_name, dataset_path).cuda()
+    # Update args.data_location to the resolved base path
+    args.data_location = base_dataset_path
+    print(f"Resolved dataset path for {dataset_name}: {args.data_location}")
 
-    # Combine encoder and head
+    # Load dataset with transforms
+    dataset = get_dataset(
+        f"{dataset_name}Val",
+        preprocess=preprocess,
+        location=args.data_location,  # Use the base path, not 'train' or 'val'
+        batch_size=args.batch_size,
+        num_workers=2
+    )
+    train_loader = get_dataloader(dataset, is_train=True, args=args)
+
+    # Debugging: Print dataset details
+    dataset_size = len(dataset.train_dataset) if hasattr(dataset, "train_dataset") else len(dataset)
+    print(f"Dataset loaded with {dataset_size} samples.")
+    print(f"Batch size: {args.batch_size}")
+
+    # Load pre-trained model
+    print(f"Loading pre-trained encoder for {dataset_name}...")
+    encoder = ImageEncoder(args).cuda()
+    head = get_classification_head(args, f"{dataset_name}Val").cuda()
     model = ImageClassifier(encoder, head).cuda()
-    
-    return model
+    model.freeze_head()
 
-def evaluate_model(model, dataloader):
-    """
-    Evaluate model on the given dataloader.
-    """
-    correct, total = 0, 0
-    model.eval()
-    with torch.no_grad():
-        for batch in dataloader:
-            inputs, labels = batch['images'].cuda(), batch['labels'].cuda()
+    # Define optimizer and loss
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.wd)
+    criterion = torch.nn.CrossEntropyLoss()
+
+    # Fine-tuning loop
+    start_time = time.time()
+    model.train()
+    for epoch in range(num_epochs):
+        print(f"\nStarting epoch {epoch + 1}/{num_epochs}...")
+        epoch_loss = 0.0
+        for batch_idx, batch in enumerate(train_loader):
+            batch_start = time.time()
+            data = maybe_dictionarize(batch)
+            inputs, labels = data["images"].cuda(), data["labels"].cuda()
+
+            optimizer.zero_grad()
             outputs = model(inputs)
-            _, preds = torch.max(outputs, 1)
-            correct += (preds == labels).sum().item()
-            total += labels.size(0)
-    return correct / total
+            loss = criterion(outputs, labels)
+            loss.backward()
+            optimizer.step()
 
-def save_results(results, save_path):
-    """
-    Save evaluation results as JSON.
-    """
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, 'w') as f:
-        json.dump(results, f, indent=4)
-    print(f"Results saved to {save_path}")
+            epoch_loss += loss.item()
+            print(f"Batch {batch_idx + 1}/{len(train_loader)}: Loss = {loss.item():.4f}, Time = {time.time() - batch_start:.2f}s", end="\r")
 
-def evaluate_and_save(args, dataset_name):
-    """
-    Evaluate model and save the results.
-    """
-    dataset_path = resolve_dataset_path(args, dataset_name)
+        print(f"\nEpoch {epoch + 1} completed. Average Loss: {epoch_loss / len(train_loader):.4f}")
 
-    dataset = get_dataset(f"{dataset_name}Val", None, dataset_path, args.batch_size)
-    val_loader = dataset.train_loader
-    test_loader = dataset.test_loader
-
-    model = load_finetuned_model(args, dataset_name)
-
-    val_acc = evaluate_model(model, val_loader)
-    test_acc = evaluate_model(model, test_loader)
-
-    results = {
-        "dataset": dataset_name,
-        "validation_accuracy": val_acc,
-        "test_accuracy": test_acc
-    }
-
-    save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
-    save_results(results, save_path)
-
-def main():
-    args = parse_arguments()
-
-    args.checkpoints_path = "/kaggle/working/checkpoints"
-    args.results_dir = "/kaggle/working/results"
-    args.data_location = "/kaggle/working/datasets"
-    args.batch_size = 32
-
-    datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
-
-    for dataset_name in datasets:
-        print(f"\n--- Evaluating {dataset_name} ---")
-        evaluate_and_save(args, dataset_name)
+    # Save the fine-tuned encoder
+    save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
+    os.makedirs(args.save, exist_ok=True)
+    model.image_encoder.save(save_path)
+    print(f"Fine-tuned model saved to {save_path}")
+    print(f"Time taken for {dataset_name}: {time.time() - start_time:.2f}s\n")
 
 if __name__ == "__main__":
-    main()
+    args = parse_arguments()
+
+    # Ensure save directory is set
+    if args.save is None:
+        args.save = "/kaggle/working/checkpoints"
+        print(f"Default save directory set to {args.save}")
+
+    dataset_epochs = {
+        "DTD": 76,
+        "EuroSAT": 12,
+        "GTSRB": 11,
+        "MNIST": 5,
+        "RESISC45": 15,
+        "SVHN": 4
+    }
+
+    # Fine-tune on each dataset
+    for dataset_name, num_epochs in dataset_epochs.items():
+        args.train_dataset = [dataset_name]
+        fine_tune_on_dataset(args, dataset_name, num_epochs)
