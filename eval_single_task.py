@@ -6,6 +6,7 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 
+
 def load_finetuned_model(args, dataset_name):
     """
     Loads the fine-tuned encoder and the classification head for the given dataset.
@@ -27,6 +28,7 @@ def load_finetuned_model(args, dataset_name):
     
     return model
 
+
 def resolve_dataset_path(args, dataset_name):
     """
     Resolves the correct dataset path for each dataset.
@@ -35,7 +37,7 @@ def resolve_dataset_path(args, dataset_name):
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")  # ✅ Direct reference to DTD
+        return os.path.join(base_path, "dtd")  # Fix nested folder
     elif dataset_name_lower == "eurosat":
         return os.path.join(base_path, "EuroSAT_splits")
     elif dataset_name_lower == "mnist":
@@ -66,6 +68,7 @@ def evaluate_model(model, dataloader):
     accuracy = correct / total
     return accuracy
 
+
 def save_results(results, save_path):
     """
     Saves evaluation results to a JSON file.
@@ -75,20 +78,15 @@ def save_results(results, save_path):
         json.dump(results, f, indent=4)
     print(f"Results saved to {save_path}")
 
+
 def evaluate_and_save(args, dataset_name):
     """
     Evaluates the fine-tuned model on validation and test datasets and saves the results.
     """
     dataset_path = resolve_dataset_path(args, dataset_name)
+    print(f"✅ Evaluating {dataset_name} using dataset path: {dataset_path}")
 
-    # ✅ Explicitly define train and validation directories
-    train_dir = os.path.join(dataset_path, "train")
-    val_dir = os.path.join(dataset_path, "val")
-
-    if not os.path.exists(train_dir) or not os.path.exists(val_dir):
-        raise FileNotFoundError(f"Train or validation directory not found for {dataset_name} at {dataset_path}")
-
-    # ✅ Load validation and test datasets correctly
+    # ✅ Load validation and test datasets
     dataset = get_dataset(f"{dataset_name}Val", None, dataset_path, args.batch_size)
     val_loader = dataset.train_loader
     test_loader = dataset.test_loader
@@ -127,6 +125,7 @@ def main():
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
         evaluate_and_save(args, dataset_name)
+
 
 if __name__ == "__main__":
     main()
