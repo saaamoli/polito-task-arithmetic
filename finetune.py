@@ -8,13 +8,13 @@ from args import parse_arguments
 
 def resolve_dataset_path(args, dataset_name):
     """
-    Consistent dataset path resolution (mirroring fine-tune logic).
+    Consistent dataset path resolution (matching fine-tuning logic).
     """
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")
+        return os.path.join(base_path, "dtd")  # Correct path to DTD dataset
     elif dataset_name_lower == "eurosat":
         return base_path
     elif dataset_name_lower == "mnist":
@@ -33,13 +33,20 @@ def load_finetuned_model(args, dataset_name):
     Load fine-tuned encoder and classification head.
     """
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
-    
+
     if not os.path.exists(encoder_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
-    
+
+    # Load the fine-tuned encoder
     encoder = torch.load(encoder_checkpoint_path).cuda()
-    head = get_classification_head(args, f"{dataset_name}Val").cuda()
-    
+
+    # Fix: Pass the correct dataset path to the classification head
+    dataset_path = resolve_dataset_path(args, dataset_name)
+
+    # Load the classification head
+    head = get_classification_head(args, dataset_name, dataset_path).cuda()
+
+    # Combine encoder and head
     model = ImageClassifier(encoder, head).cuda()
     
     return model
