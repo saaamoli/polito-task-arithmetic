@@ -41,9 +41,9 @@ def resolve_dataset_path(args, dataset_name):
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")  # ✅ Corrected path for DTD
+        return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return os.path.join(base_path, "EuroSAT_splits")
+        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Corrected path
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
@@ -54,6 +54,7 @@ def resolve_dataset_path(args, dataset_name):
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
 
 
 def evaluate_model(model, dataloader):
