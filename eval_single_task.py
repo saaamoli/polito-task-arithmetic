@@ -88,3 +88,35 @@ def run_evaluation(args, dataset_name, model):
     print(f"Test Accuracy on {dataset_name}: {test_accuracy * 100:.2f}%")
 
     return val_accuracy, test_accuracy
+
+import json
+import os
+
+def save_results(dataset_name, val_accuracy, test_accuracy, save_dir="/kaggle/working/results"):
+    # Ensure the results directory exists
+    os.makedirs(save_dir, exist_ok=True)
+    
+    # Prepare the results dictionary
+    results = {
+        "dataset": dataset_name,
+        "validation_accuracy": val_accuracy,
+        "test_accuracy": test_accuracy
+    }
+    
+    # Define the file path
+    results_file = os.path.join(save_dir, f"{dataset_name}_results.json")
+    
+    # Save results to JSON
+    with open(results_file, "w") as f:
+        json.dump(results, f, indent=4)
+    
+    print(f"Results saved to {results_file}")
+
+
+def evaluate_and_save(args, dataset_name, model):
+    # Run evaluation
+    val_accuracy, test_accuracy = run_evaluation(args, dataset_name, model)
+    
+    # Save the results
+    save_results(dataset_name, val_accuracy, test_accuracy)
+
