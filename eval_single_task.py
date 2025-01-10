@@ -6,7 +6,6 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 
-
 def load_finetuned_model(args, dataset_name):
     """
     Loads the fine-tuned encoder and the classification head for the given dataset.
@@ -37,7 +36,7 @@ def resolve_dataset_path(args, dataset_name):
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")  # Fix nested folder
+        return os.path.join(base_path, "dtd")  # ✅ Corrected path for DTD
     elif dataset_name_lower == "eurosat":
         return os.path.join(base_path, "EuroSAT_splits")
     elif dataset_name_lower == "mnist":
