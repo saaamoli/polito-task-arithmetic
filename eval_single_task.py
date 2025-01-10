@@ -14,19 +14,23 @@ def load_finetuned_model(args, dataset_name):
     """
     # ✅ Path to the fine-tuned encoder checkpoint
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
-    
+
+    # ✅ Check if the checkpoint exists; if not, skip the dataset
     if not os.path.exists(encoder_checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
-    
+        print(f"⚠️ Checkpoint for {dataset_name} not found at {encoder_checkpoint_path}. Skipping...")
+        return None  # Skip if checkpoint is missing
+
+    print(f"✅ Loading checkpoint for {dataset_name} from {encoder_checkpoint_path}")
+
     # ✅ Load the fine-tuned encoder
     encoder = torch.load(encoder_checkpoint_path).cuda()
 
     # ✅ Load the classification head for the dataset
     head = get_classification_head(args, dataset_name).cuda()
-    
+
     # ✅ Combine encoder and head into a classifier
     model = ImageClassifier(encoder, head).cuda()
-    
+
     return model
 
 
@@ -117,6 +121,10 @@ def evaluate_and_save(args, dataset_name):
     # ✅ Load the fine-tuned model
     model = load_finetuned_model(args, dataset_name)
 
+    # ✅ If model is None, skip this dataset
+    if model is None:
+        return  # Skip evaluation if no model was loaded
+
     # ✅ Evaluate the model
     val_acc = evaluate_model(model, val_loader)
     test_acc = evaluate_model(model, test_loader)
@@ -134,7 +142,7 @@ def evaluate_and_save(args, dataset_name):
 
 def main():
     args = parse_arguments()
-    
+
     # ✅ Ensure consistent argument names
     args.checkpoints_path = "/kaggle/working/checkpoints"
     args.results_dir = "/kaggle/working/results"
@@ -143,7 +151,7 @@ def main():
 
     # ✅ List of datasets to evaluate
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
-    
+
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
         evaluate_and_save(args, dataset_name)
