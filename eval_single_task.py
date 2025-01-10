@@ -44,7 +44,7 @@ def resolve_dataset_path(args, dataset_name):
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return os.path.join(base_path, "EuroSAT_splits")  # Correct path for EuroSAT
+        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Correct path for EuroSAT
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
