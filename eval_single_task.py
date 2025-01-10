@@ -35,7 +35,7 @@ def resolve_dataset_path(args, dataset_name):
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")  # Handle nested dtd folder
+        return os.path.join(base_path, "dtd")  # ✅ Direct reference to DTD
     elif dataset_name_lower == "eurosat":
         return os.path.join(base_path, "EuroSAT_splits")
     elif dataset_name_lower == "mnist":
@@ -48,6 +48,7 @@ def resolve_dataset_path(args, dataset_name):
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
 
 def evaluate_model(model, dataloader):
     """
@@ -80,7 +81,14 @@ def evaluate_and_save(args, dataset_name):
     """
     dataset_path = resolve_dataset_path(args, dataset_name)
 
-    # ✅ Load validation and test datasets
+    # ✅ Explicitly define train and validation directories
+    train_dir = os.path.join(dataset_path, "train")
+    val_dir = os.path.join(dataset_path, "val")
+
+    if not os.path.exists(train_dir) or not os.path.exists(val_dir):
+        raise FileNotFoundError(f"Train or validation directory not found for {dataset_name} at {dataset_path}")
+
+    # ✅ Load validation and test datasets correctly
     dataset = get_dataset(f"{dataset_name}Val", None, dataset_path, args.batch_size)
     val_loader = dataset.train_loader
     test_loader = dataset.test_loader
@@ -102,6 +110,7 @@ def evaluate_and_save(args, dataset_name):
     # ✅ Save results
     save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
     save_results(results, save_path)
+
 
 def main():
     args = parse_arguments()
