@@ -7,16 +7,18 @@ from heads import get_classification_head
 from args import parse_arguments
 
 def load_finetuned_model(args, dataset_name):
+    """
+    Loads the fine-tuned encoder and the classification head for the given dataset.
+    """
     # ✅ Path to the fine-tuned encoder checkpoint
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
     
     if not os.path.exists(encoder_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
     
-    # ✅ Load the fine-tuned encoder
-    encoder = ImageEncoder(args).cuda()
-    encoder.load_state_dict(torch.load(encoder_checkpoint_path))  # <-- Loading checkpoint
-    
+    # ✅ Load the fine-tuned encoder directly
+    encoder = torch.load(encoder_checkpoint_path).cuda()
+
     # ✅ Load the classification head for the dataset
     head = get_classification_head(args, dataset_name).cuda()
     
@@ -27,13 +29,13 @@ def load_finetuned_model(args, dataset_name):
 
 def resolve_dataset_path(args, dataset_name):
     """
-    Dynamically resolve dataset paths based on dataset names.
+    Resolves the correct dataset path for each dataset.
     """
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")  # Handle nested dtd folder
+        return os.path.join(base_path, "dtd", "dtd")  # Handle nested dtd folder
     elif dataset_name_lower == "eurosat":
         return os.path.join(base_path, "EuroSAT_splits")
     elif dataset_name_lower == "mnist":
@@ -48,6 +50,9 @@ def resolve_dataset_path(args, dataset_name):
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
 def evaluate_model(model, dataloader):
+    """
+    Evaluates the model on the provided DataLoader and calculates accuracy.
+    """
     correct, total = 0, 0
     model.eval()
     with torch.no_grad():
@@ -61,12 +66,18 @@ def evaluate_model(model, dataloader):
     return accuracy
 
 def save_results(results, save_path):
+    """
+    Saves evaluation results to a JSON file.
+    """
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, 'w') as f:
         json.dump(results, f, indent=4)
     print(f"Results saved to {save_path}")
 
 def evaluate_and_save(args, dataset_name):
+    """
+    Evaluates the fine-tuned model on validation and test datasets and saves the results.
+    """
     dataset_path = resolve_dataset_path(args, dataset_name)
 
     # ✅ Load validation and test datasets
