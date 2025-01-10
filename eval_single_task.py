@@ -6,21 +6,25 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 
-def load_finetuned_model(dataset_name, args):
-    checkpoint_path = os.path.join(args.checkpoint_dir, f"{dataset_name}_finetuned.pt")
-    if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found for {dataset_name} at {checkpoint_path}")
+def load_finetuned_model(args, dataset_name):
+    # ✅ Path to the fine-tuned encoder checkpoint
+    encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
     
-    print(f"Loading fine-tuned encoder for {dataset_name}...")
+    if not os.path.exists(encoder_checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
+    
+    # ✅ Load the fine-tuned encoder
     encoder = ImageEncoder(args).cuda()
-    encoder.load_state_dict(torch.load(checkpoint_path))
-    encoder.eval()
+    encoder.load_state_dict(torch.load(encoder_checkpoint_path))  # <-- Loading checkpoint
     
-    head = get_classification_head(args, f"{dataset_name}Val").cuda()
-    head.eval()
+    # ✅ Load the classification head for the dataset
+    head = get_classification_head(args, dataset_name).cuda()
     
+    # ✅ Combine encoder and head into a classifier
     model = ImageClassifier(encoder, head).cuda()
+    
     return model
+
 
 def evaluate_model(model, dataloader):
     correct, total = 0, 0
