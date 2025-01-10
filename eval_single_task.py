@@ -12,7 +12,7 @@ def load_finetuned_model(args, dataset_name):
     """
     Load the fine-tuned encoder and the classification head for the given dataset.
     """
-    # ✅ Path to the fine-tuned encoder checkpoint
+    # ✅ Correct path to the fine-tuned encoder checkpoint
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
 
     # ✅ Check if the checkpoint exists; if not, skip the dataset
@@ -23,7 +23,7 @@ def load_finetuned_model(args, dataset_name):
     print(f"✅ Loading checkpoint for {dataset_name} from {encoder_checkpoint_path}")
 
     # ✅ Load the fine-tuned encoder
-    encoder = torch.load(encoder_checkpoint_path).cuda()
+    encoder = torch.load(encoder_checkpoint_path, map_location="cuda")
 
     # ✅ Load the classification head for the dataset
     head = get_classification_head(args, dataset_name).cuda()
@@ -44,7 +44,7 @@ def resolve_dataset_path(args, dataset_name):
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Correct path for EuroSAT
+        return os.path.join(base_path, "EuroSAT_splits")  # Correct path for EuroSAT
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
@@ -103,7 +103,6 @@ def evaluate_and_save(args, dataset_name):
         return  # Skip evaluation if results already exist
 
     dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = dataset_path  # Ensure correct dataset path
 
     # ✅ Define preprocessing transforms
     preprocess = transforms.Compose([
