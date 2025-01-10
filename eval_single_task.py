@@ -101,13 +101,20 @@ def evaluate_and_save(args, dataset_name):
     """
     Evaluates the fine-tuned model on validation and test datasets and saves the results.
     """
+    # ✅ Check if results already exist
+    save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
+    if os.path.exists(save_path):
+        print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
+        return  # Skip evaluation if results already exist
+
     dataset_path = resolve_dataset_path(args, dataset_name)
+    args.data_location = dataset_path  # Ensure correct dataset path
 
     # ✅ Define preprocessing transforms
     preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),  # Resize to model input size
-        transforms.ToTensor(),          # Convert images to tensors
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],  # Standard normalization
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
                              std=[0.229, 0.224, 0.225])
     ])
 
@@ -131,7 +138,6 @@ def evaluate_and_save(args, dataset_name):
     }
 
     # ✅ Save results
-    save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
     save_results(results, save_path)
 
 
