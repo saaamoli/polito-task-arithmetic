@@ -21,3 +21,33 @@ def load_finetuned_model(args, dataset_name):
     model = ImageClassifier(encoder, head).cuda()
     
     return model
+from datasets.registry import get_dataset
+from torchvision import transforms
+
+def load_datasets(args, dataset_name):
+    # Define standard preprocessing transforms (similar to fine-tuning)
+    preprocess = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    
+    # Load the validation dataset
+    val_dataset = get_dataset(
+        f"{dataset_name}Val",  # Validation split
+        preprocess=preprocess,
+        location=args.data_location,
+        batch_size=args.batch_size,
+        num_workers=2
+    )
+
+    # Load the test dataset
+    test_dataset = get_dataset(
+        dataset_name,  # Test split
+        preprocess=preprocess,
+        location=args.data_location,
+        batch_size=args.batch_size,
+        num_workers=2
+    )
+
+    return val_dataset, test_dataset
