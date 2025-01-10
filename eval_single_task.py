@@ -51,3 +51,40 @@ def load_datasets(args, dataset_name):
     )
 
     return val_dataset, test_dataset
+
+import torch
+from tqdm import tqdm
+
+def evaluate_model(model, dataloader):
+    model.eval()  # Set model to evaluation mode
+    correct = 0
+    total = 0
+
+    with torch.no_grad():  # No gradient calculation during evaluation
+        for batch in tqdm(dataloader, desc="Evaluating"):
+            inputs, labels = batch["images"].cuda(), batch["labels"].cuda()
+            
+            # Forward pass
+            outputs = model(inputs)
+            _, predicted = torch.max(outputs, 1)  # Get the predicted class
+
+            # Count correct predictions
+            correct += (predicted == labels).sum().item()
+            total += labels.size(0)
+
+    accuracy = correct / total  # Calculate accuracy
+    return accuracy
+
+def run_evaluation(args, dataset_name, model):
+    # Load validation and test datasets
+    val_dataset, test_dataset = load_datasets(args, dataset_name)
+
+    # Evaluate on Validation Set
+    val_accuracy = evaluate_model(model, val_dataset.test_loader)
+    print(f"Validation Accuracy on {dataset_name}: {val_accuracy * 100:.2f}%")
+
+    # Evaluate on Test Set
+    test_accuracy = evaluate_model(model, test_dataset.test_loader)
+    print(f"Test Accuracy on {dataset_name}: {test_accuracy * 100:.2f}%")
+
+    return val_accuracy, test_accuracy
