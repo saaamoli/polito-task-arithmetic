@@ -25,6 +25,27 @@ def load_finetuned_model(args, dataset_name):
     
     return model
 
+def resolve_dataset_path(args, dataset_name):
+    """
+    Dynamically resolve dataset paths based on dataset names.
+    """
+    base_path = args.data_location
+    dataset_name_lower = dataset_name.lower()
+
+    if dataset_name_lower == "dtd":
+        return os.path.join(base_path, "dtd", "dtd")  # Handle nested dtd folder
+    elif dataset_name_lower == "eurosat":
+        return os.path.join(base_path, "EuroSAT_splits")
+    elif dataset_name_lower == "mnist":
+        return os.path.join(base_path, "MNIST", "raw")
+    elif dataset_name_lower == "gtsrb":
+        return os.path.join(base_path, "gtsrb")
+    elif dataset_name_lower == "resisc45":
+        return os.path.join(base_path, "resisc45")
+    elif dataset_name_lower == "svhn":
+        return os.path.join(base_path, "svhn")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
 
 def evaluate_model(model, dataloader):
     correct, total = 0, 0
@@ -45,37 +66,47 @@ def save_results(results, save_path):
         json.dump(results, f, indent=4)
     print(f"Results saved to {save_path}")
 
-def evaluate_and_save(dataset_name, args):
-    dataset = get_dataset(f"{dataset_name}Val", None, args.data_location, args.batch_size)
+def evaluate_and_save(args, dataset_name):
+    dataset_path = resolve_dataset_path(args, dataset_name)
+
+    # ✅ Load validation and test datasets
+    dataset = get_dataset(f"{dataset_name}Val", None, dataset_path, args.batch_size)
     val_loader = dataset.train_loader
     test_loader = dataset.test_loader
-    
-    model = load_finetuned_model(dataset_name, args)
-    
+
+    # ✅ Load the fine-tuned model
+    model = load_finetuned_model(args, dataset_name)
+
+    # ✅ Evaluate the model
     val_acc = evaluate_model(model, val_loader)
     test_acc = evaluate_model(model, test_loader)
-    
+
+    # ✅ Prepare results
     results = {
         "dataset": dataset_name,
         "validation_accuracy": val_acc,
         "test_accuracy": test_acc
     }
-    
+
+    # ✅ Save results
     save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
     save_results(results, save_path)
 
 def main():
     args = parse_arguments()
-    args.checkpoint_dir = "/kaggle/working/checkpoints"
+    
+    # ✅ Ensure consistent argument names
+    args.checkpoints_path = "/kaggle/working/checkpoints"
     args.results_dir = "/kaggle/working/results"
     args.data_location = "/kaggle/working/datasets"
     args.batch_size = 32
 
+    # ✅ List of datasets to evaluate
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
     
     for dataset_name in datasets:
-        print(f"\nEvaluating {dataset_name}...")
-        evaluate_and_save(dataset_name, args)
+        print(f"\n--- Evaluating {dataset_name} ---")
+        evaluate_and_save(args, dataset_name)
 
 if __name__ == "__main__":
     main()
