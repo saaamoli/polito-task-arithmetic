@@ -35,7 +35,7 @@ def resolve_dataset_path(args, dataset_name):
     dataset_name_lower = dataset_name.lower()
 
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd", "dtd")  # Handle nested dtd folder
+        return os.path.join(base_path, "dtd")  # Handle nested dtd folder
     elif dataset_name_lower == "eurosat":
         return os.path.join(base_path, "EuroSAT_splits")
     elif dataset_name_lower == "mnist":
