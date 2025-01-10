@@ -5,6 +5,8 @@ from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
+from torchvision import transforms
+
 
 def load_finetuned_model(args, dataset_name):
     """
@@ -19,11 +21,6 @@ def load_finetuned_model(args, dataset_name):
     # ✅ Load the fine-tuned encoder
     encoder = torch.load(encoder_checkpoint_path).cuda()
 
-    # ✅ Correct dataset path for classification head
-    dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = dataset_path  # ✅ Add this line to fix dataset path
-
-
     # ✅ Load the classification head for the dataset
     head = get_classification_head(args, dataset_name).cuda()
     
@@ -31,7 +28,6 @@ def load_finetuned_model(args, dataset_name):
     model = ImageClassifier(encoder, head).cuda()
     
     return model
-
 
 
 def resolve_dataset_path(args, dataset_name):
@@ -44,19 +40,17 @@ def resolve_dataset_path(args, dataset_name):
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return base_path  # ✅ Corrected path
+        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Correct path for EuroSAT
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
         return os.path.join(base_path, "gtsrb")
     elif dataset_name_lower == "resisc45":
-        return base_path
+        return os.path.join(base_path, "resisc45")
     elif dataset_name_lower == "svhn":
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
-
-
 
 
 def evaluate_model(model, dataloader):
@@ -84,7 +78,6 @@ def evaluate_model(model, dataloader):
     return accuracy
 
 
-
 def save_results(results, save_path):
     """
     Saves evaluation results to a JSON file.
@@ -92,10 +85,8 @@ def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
     with open(save_path, 'w') as f:
         json.dump(results, f, indent=4)
-    print(f"Results saved to {save_path}")
+    print(f"✅ Results saved to {save_path}")
 
-
-from torchvision import transforms
 
 def evaluate_and_save(args, dataset_name):
     """
@@ -139,8 +130,6 @@ def evaluate_and_save(args, dataset_name):
 
     # ✅ Save results
     save_results(results, save_path)
-
-
 
 
 def main():
