@@ -120,3 +120,28 @@ def evaluate_and_save(args, dataset_name, model):
     # Save the results
     save_results(dataset_name, val_accuracy, test_accuracy)
 
+
+
+def evaluate_all_datasets(args):
+    # List of all datasets we fine-tuned on
+    datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
+    
+    for dataset_name in datasets:
+        print(f"\n--- Evaluating on {dataset_name} ---")
+        
+        # Load the fine-tuned model for the dataset
+        model = load_finetuned_model(args, dataset_name)
+        
+        # Evaluate and save results
+        evaluate_and_save(args, dataset_name, model)
+
+
+
+if __name__ == "__main__":
+    # Parse command-line arguments
+    args = parse_arguments()
+    
+    # Run evaluation for all datasets
+    evaluate_all_datasets(args)
+
+
