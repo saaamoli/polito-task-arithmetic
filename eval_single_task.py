@@ -64,13 +64,22 @@ def evaluate_model(model, dataloader):
     model.eval()
     with torch.no_grad():
         for batch in dataloader:
-            inputs, labels = batch['images'].cuda(), batch['labels'].cuda()
+            # ✅ Handle both dict and tuple formats
+            if isinstance(batch, dict):
+                inputs, labels = batch['images'].cuda(), batch['labels'].cuda()
+            elif isinstance(batch, (tuple, list)):
+                inputs, labels = batch[0].cuda(), batch[1].cuda()
+            else:
+                raise TypeError(f"Unexpected batch type: {type(batch)}")
+
             outputs = model(inputs)
             _, preds = torch.max(outputs, 1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
+
     accuracy = correct / total
     return accuracy
+
 
 
 def save_results(results, save_path):
