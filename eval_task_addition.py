@@ -65,21 +65,24 @@ def evaluate_model(model, dataloader):
 
 def combine_task_vectors(task_vectors, alpha):
     """
-    Combine task vectors (encoder weights) with scaling by alpha.
+    Combine task vectors with proper scaling by alpha.
     """
     combined_vector = copy.deepcopy(task_vectors[0])
 
-    for vec in task_vectors[1:]:
+    for vec_idx, vec in enumerate(task_vectors[1:], start=1):
         for param_combined, param_vec in zip(combined_vector.parameters(), vec.parameters()):
             if param_combined.data.shape == param_vec.data.shape:
-                param_combined.data += param_vec.data
+                # Apply alpha scaling correctly to each task vector
+                param_combined.data += alpha * param_vec.data
             else:
-                print(f"⚠️ Skipping incompatible parameters: {param_combined.shape} vs {param_vec.shape}")
+                print(f"⚠️ Skipping incompatible parameters at index {vec_idx}: {param_combined.shape} vs {param_vec.shape}")
 
-    for param in combined_vector.parameters():
-        param.data *= alpha
+    # 🔍 Debug: Verify if the combined vector changes
+    total_norm = sum(p.data.norm().item() for p in combined_vector.parameters())
+    print(f"🔎 Combined vector norm at alpha {alpha}: {total_norm:.4f}")
 
     return combined_vector
+
 
 
 
