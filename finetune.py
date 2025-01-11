@@ -15,16 +15,12 @@ from args import parse_arguments
 from torchvision import transforms
 
 def resolve_dataset_path(args, dataset_name):
-    """
-    Dynamically resolve dataset paths based on dataset names.
-    """
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
-
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return base_path 
+        return base_path
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
@@ -39,69 +35,54 @@ def resolve_dataset_path(args, dataset_name):
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
 
-    # Check if the checkpoint already exists
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
         print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
         return
 
-    # Define preprocessing transforms
+    # ✅ Data Augmentation for Training
     if dataset_name.lower() == "mnist":
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
-            transforms.Grayscale(num_output_channels=3),  # Convert grayscale to RGB
+            transforms.Grayscale(num_output_channels=3),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(15),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
     else:
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(15),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
-    # Resolve dataset path
     base_dataset_path = resolve_dataset_path(args, dataset_name)
-    print(f"Base dataset path for {dataset_name}: {base_dataset_path}")
-
-    # Update args.data_location to the resolved base path
     args.data_location = base_dataset_path
-    print(f"Resolved dataset path for {dataset_name}: {args.data_location}")
 
-    # Load dataset with transforms
-    dataset = get_dataset(
-        f"{dataset_name}Val",
-        preprocess=preprocess,
-        location=args.data_location,  # Use the base path, not 'train' or 'val'
-        batch_size=args.batch_size,
-        num_workers=2
-    )
+    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=args.data_location, batch_size=args.batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
+    val_loader = get_dataloader(dataset, is_train=False, args=args)
 
-    # Debugging: Print dataset details
-    dataset_size = len(dataset.train_dataset) if hasattr(dataset, "train_dataset") else len(dataset)
-    print(f"Dataset loaded with {dataset_size} samples.")
-    print(f"Batch size: {args.batch_size}")
-
-    # Load pre-trained model
-    print(f"Loading pre-trained encoder for {dataset_name}...")
     encoder = ImageEncoder(args).cuda()
     head = get_classification_head(args, f"{dataset_name}Val").cuda()
     model = ImageClassifier(encoder, head).cuda()
     model.freeze_head()
 
-    # Define optimizer and loss
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.wd)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=1e-4)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
     criterion = torch.nn.CrossEntropyLoss()
 
-    # Fine-tuning loop
-    start_time = time.time()
-    model.train()
+    best_val_loss = float('inf')
+    patience, early_stop_counter = 5, 0
+
     for epoch in range(num_epochs):
-        print(f"\nStarting epoch {epoch + 1}/{num_epochs}...")
+        model.train()
         epoch_loss = 0.0
-        for batch_idx, batch in enumerate(train_loader):
-            batch_start = time.time()
+        for batch in train_loader:
             data = maybe_dictionarize(batch)
             inputs, labels = data["images"].cuda(), data["labels"].cuda()
 
@@ -112,35 +93,49 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
             optimizer.step()
 
             epoch_loss += loss.item()
-            print(f"Batch {batch_idx + 1}/{len(train_loader)}: Loss = {loss.item():.4f}, Time = {time.time() - batch_start:.2f}s", end="\r")
 
-        print(f"\nEpoch {epoch + 1} completed. Average Loss: {epoch_loss / len(train_loader):.4f}")
+        scheduler.step()
 
-    # Save the fine-tuned encoder
-    save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
+        # ✅ Validation Phase
+        model.eval()
+        val_loss, correct, total = 0.0, 0, 0
+        with torch.no_grad():
+            for batch in val_loader:
+                data = maybe_dictionarize(batch)
+                inputs, labels = data["images"].cuda(), data["labels"].cuda()
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+                val_loss += loss.item()
+                _, preds = torch.max(outputs, 1)
+                correct += (preds == labels).sum().item()
+                total += labels.size(0)
+
+        avg_val_loss = val_loss / len(val_loader)
+        val_accuracy = correct / total
+
+        print(f"Epoch {epoch+1}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
+
+        # ✅ Early Stopping
+        if avg_val_loss < best_val_loss:
+            best_val_loss = avg_val_loss
+            early_stop_counter = 0
+        else:
+            early_stop_counter += 1
+            if early_stop_counter >= patience:
+                print(f"⚠️ Early stopping triggered at epoch {epoch+1}")
+                break
+
+    save_path = os.path.join(args.save, f"{dataset_name}_finetuned_v2.pt")
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(save_path)
-    print(f"Fine-tuned model saved to {save_path}")
-    print(f"Time taken for {dataset_name}: {time.time() - start_time:.2f}s\n")
+    print(f"✅ Fine-tuned model saved to {save_path}")
 
 if __name__ == "__main__":
     args = parse_arguments()
+    args.save = "/kaggle/working/checkpoints_updated"
+    args.lr = 1e-4
+    args.batch_size = 32
 
-    # Ensure save directory is set
-    if args.save is None:
-        args.save = "/kaggle/working/checkpoints"
-        print(f"Default save directory set to {args.save}")
-
-    dataset_epochs = {
-        "DTD": 76,
-        "EuroSAT": 12,
-        "GTSRB": 11,
-        "MNIST": 5,
-        "RESISC45": 15,
-        "SVHN": 4
-    }
-
-    # Fine-tune on each dataset
+    dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
     for dataset_name, num_epochs in dataset_epochs.items():
-        args.train_dataset = [dataset_name]
         fine_tune_on_dataset(args, dataset_name, num_epochs)
