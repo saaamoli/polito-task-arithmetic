@@ -64,7 +64,12 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         # Add the remaining task vectors
         for vec in task_vectors[1:]:
             for param_combined, param_vec in zip(combined_task_vector.parameters(), vec.parameters()):
-                param_combined.data += param_vec.data
+                for param_combined, param_vec in zip(combined_task_vector.parameters(), vec.parameters()):
+                    if param_combined.data.shape == param_vec.data.shape:
+                        param_combined.data += param_vec.data
+                    else:
+                        print(f"⚠️ Skipping incompatible parameters with shapes {param_combined.data.shape} and {param_vec.data.shape}")
+
 
         
         # Scale by alpha
