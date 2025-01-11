@@ -19,16 +19,12 @@ def load_task_vector(args, dataset_name):
     """
     Load the encoder task vector for the given dataset.
     """
-    # ✅ Corrected the path to checkpoints directory
     checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
-    
     if not os.path.exists(checkpoint_path):
         raise FileNotFoundError(f"Task vector (encoder) not found: {checkpoint_path}")
     
     print(f"🔄 Loading encoder task vector for {dataset_name} from {checkpoint_path}")
-    return torch.load(checkpoint_path, map_location="cuda")  # ✅ Correctly loading encoder
-
-
+    return torch.load(checkpoint_path, map_location="cuda")
 
 
 def resolve_dataset_path(args, dataset_name):
@@ -59,8 +55,16 @@ def evaluate_model(model, dataloader):
             _, preds = torch.max(outputs, 1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
-    accuracy = correct / total
-    return accuracy
+    return correct / total
+
+
+def normalize_vector(vector):
+    """Normalize task vector to prevent scaling issues."""
+    with torch.no_grad():
+        for param in vector.parameters():
+            norm = param.data.norm()
+            if norm > 0:
+                param.data /= norm
 
 
 def combine_task_vectors(task_vectors, alpha):
@@ -68,23 +72,36 @@ def combine_task_vectors(task_vectors, alpha):
     Combine task vectors with proper scaling by alpha.
     """
     combined_vector = copy.deepcopy(task_vectors[0])
+    normalize_vector(combined_vector)
 
     for vec_idx, vec in enumerate(task_vectors[1:], start=1):
+        normalize_vector(vec)
         for param_combined, param_vec in zip(combined_vector.parameters(), vec.parameters()):
             if param_combined.data.shape == param_vec.data.shape:
-                # Apply alpha scaling correctly to each task vector
                 param_combined.data += alpha * param_vec.data
             else:
                 print(f"⚠️ Skipping incompatible parameters at index {vec_idx}: {param_combined.shape} vs {param_vec.shape}")
 
-    # 🔍 Debug: Verify if the combined vector changes
     total_norm = sum(p.data.norm().item() for p in combined_vector.parameters())
     print(f"🔎 Combined vector norm at alpha {alpha}: {total_norm:.4f}")
 
     return combined_vector
 
 
+def blend_with_encoder(encoder, combined_vector, alpha):
+    """Blend combined task vector with the encoder."""
+    with torch.no_grad():
+        for param_encoder, param_combined in zip(encoder.parameters(), combined_vector.parameters()):
+            if param_encoder.data.shape == param_combined.data.shape:
+                param_encoder.data = (1 - alpha) * param_encoder.data + alpha * param_combined.data
+            else:
+                print(f"⚠️ Skipping incompatible parameters: {param_encoder.shape} vs {param_combined.shape}")
 
+
+def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
+    """Compute average normalized accuracy based on the project formula."""
+    normalized_accs = [va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)]
+    return np.mean(normalized_accs)
 
 
 def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
@@ -92,20 +109,8 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
     print(f"\n🔍 Evaluating alpha = {alpha}")
     val_accuracies = []
 
-    # 🔄 Combine and normalize task vectors
     combined_task_vector = combine_task_vectors(task_vectors, alpha)
-
-    # 🛠 Overwrite encoder parameters instead of adding
-    with torch.no_grad():
-        for param_encoder, param_combined in zip(encoder.parameters(), combined_task_vector.parameters()):
-            if param_encoder.data.shape == param_combined.data.shape:
-                param_encoder.data.copy_(param_combined.data)
-            else:
-                print(f"⚠️ Skipping incompatible parameters: {param_encoder.shape} vs {param_combined.shape}")
-
-    # 🔍 Debug: Check encoder norm after update
-    total_encoder_norm = sum(p.data.norm().item() for p in encoder.parameters())
-    print(f"🔎 Encoder norm after overwriting with combined vector at alpha {alpha}: {total_encoder_norm:.4f}")
+    blend_with_encoder(encoder, combined_task_vector, alpha)
 
     for dataset_name in datasets:
         print(f"\n📊 Evaluating dataset: {dataset_name}")
@@ -121,19 +126,16 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         val_loader = dataset.train_loader
 
-        # 🛠 Use updated encoder with dataset-specific classification head
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(encoder, head).cuda()
 
-        # 🕒 Progress log for each batch
         acc = evaluate_model(model, val_loader)
         print(f"✅ Accuracy on {dataset_name} at alpha {alpha}: {acc:.4f}")
         val_accuracies.append(acc)
 
-    avg_norm_acc = np.mean(val_accuracies)
+    avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
     print(f"📈 Average normalized accuracy at alpha {alpha}: {avg_norm_acc:.4f}")
     return avg_norm_acc, val_accuracies
-
 
 
 def main():
