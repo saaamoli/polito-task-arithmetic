@@ -2,32 +2,31 @@ import os
 import json
 import torch
 import numpy as np
+import warnings  # 🟢 Import warnings module
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head, ClassificationHead
 from args import parse_arguments
 from torchvision import transforms
 import copy
-import logging
 
-# ✅ Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# 🟢 Suppress specific warnings (UserWarning, FutureWarning)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
+# 🟢 OPTIONAL: Suppress all warnings (Uncomment if needed)
+# warnings.filterwarnings("ignore")
 
 def load_task_vector(args, dataset_name):
-    """Load classification head (task vector) for a dataset."""
     head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
     if not os.path.exists(head_path):
         raise FileNotFoundError(f"Task vector not found: {head_path}")
 
     torch.serialization.add_safe_globals({ClassificationHead, set})
-    logging.info(f"📦 Loading task vector for {dataset_name} from {head_path}")
-    
+    print(f"🔄 Loading classification head for {dataset_name} from {head_path}")
     return torch.load(head_path, map_location="cuda")
 
-
 def resolve_dataset_path(args, dataset_name):
-    """Resolves the correct dataset path for each dataset."""
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
 
@@ -37,53 +36,46 @@ def resolve_dataset_path(args, dataset_name):
         "mnist": os.path.join(base_path, "MNIST", "raw"),
         "gtsrb": os.path.join(base_path, "gtsrb"),
         "resisc45": base_path,
-        "svhn": os.path.join(base_path, "svhn")
+        "svhn": os.path.join(base_path, "svhn"),
     }
 
-    resolved_path = paths.get(dataset_name_lower)
-    if resolved_path:
-        logging.info(f"📂 Resolved path for {dataset_name}: {resolved_path}")
-        return resolved_path
+    if dataset_name_lower in paths:
+        return paths[dataset_name_lower]
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-
 def evaluate_model(model, dataloader):
-    """Evaluate model accuracy on provided data loader."""
     correct, total = 0, 0
     model.eval()
     with torch.no_grad():
         for batch in dataloader:
-            inputs, labels = (batch['images'].cuda(), batch['labels'].cuda()) if isinstance(batch, dict) else (batch[0].cuda(), batch[1].cuda())
+            inputs, labels = batch[0].cuda(), batch[1].cuda()
             outputs = model(inputs)
             _, preds = torch.max(outputs, 1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
-    accuracy = correct / total
-    return accuracy
-
+    return correct / total
 
 def combine_task_vectors(task_vectors, alpha):
-    """Combine task vectors with scaling by alpha, handling shape mismatches."""
     combined_vector = copy.deepcopy(task_vectors[0])
     for vec in task_vectors[1:]:
         for param_combined, param_vec in zip(combined_vector.parameters(), vec.parameters()):
             if param_combined.data.shape == param_vec.data.shape:
                 param_combined.data += param_vec.data
             else:
-                logging.warning(f"⚠️ Skipping incompatible parameters: {param_combined.shape} vs {param_vec.shape}")
+                print(f"⚠️ Skipping incompatible parameters: {param_combined.shape} vs {param_vec.shape}")
     for param in combined_vector.parameters():
         param.data *= alpha
     return combined_vector
 
-
 def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
-    """Evaluate the model with a specific alpha on all validation datasets."""
-    logging.info(f"🔎 Evaluating with alpha = {alpha:.2f}")
+    print(f"🔍 Evaluating alpha = {alpha}")
     val_accuracies = []
 
     for dataset_name in datasets:
         dataset_path = resolve_dataset_path(args, dataset_name)
+        print(f"📊 Evaluating on dataset: {dataset_name}")
+
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -99,13 +91,12 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         model = ImageClassifier(encoder, head).cuda()
 
         acc = evaluate_model(model, val_loader)
-        logging.info(f"📊 Validation accuracy for {dataset_name} with α={alpha:.2f}: {acc:.4f}")
+        print(f"✅ Accuracy on {dataset_name} at alpha {alpha}: {acc:.4f}")
         val_accuracies.append(acc)
 
-    avg_norm_acc = np.mean([va / ba for va, ba in zip(val_accuracies, best_accuracies)])
-    logging.info(f"✅ Average Normalized Accuracy for α={alpha:.2f}: {avg_norm_acc:.4f}")
+    avg_norm_acc = np.mean(val_accuracies)
+    print(f"📈 Average normalized accuracy at alpha {alpha}: {avg_norm_acc:.4f}")
     return avg_norm_acc, val_accuracies
-
 
 def main():
     args = parse_arguments()
@@ -116,10 +107,16 @@ def main():
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
+    print("🚀 Starting the evaluation process...")
     encoder = ImageEncoder(args).cuda()
     task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
 
-    best_accuracies = [json.load(open(os.path.join(args.results_dir, f"{dataset}_results.json")))["validation_accuracy"] for dataset in datasets]
+    best_accuracies = []
+    for dataset in datasets:
+        result_path = os.path.join(args.results_dir, f"{dataset}_results.json")
+        with open(result_path, 'r') as file:
+            data = json.load(file)
+            best_accuracies.append(data['validation_accuracy'])
 
     best_alpha, best_avg_norm_acc = 0, 0
 
@@ -128,19 +125,7 @@ def main():
         if avg_norm_acc > best_avg_norm_acc:
             best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
 
-    logging.info(f"🏆 Best alpha (α★): {best_alpha} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
-
-    results = {
-        "best_alpha": best_alpha,
-        "average_absolute_accuracy": best_avg_norm_acc,
-        "average_normalized_accuracy": best_avg_norm_acc
-    }
-
-    save_path = os.path.join(args.results_dir, "multi_task_results.json")
-    with open(save_path, 'w') as f:
-        json.dump(results, f, indent=4)
-    logging.info(f"✅ Results saved to {save_path}")
-
+    print(f"🏆 Best alpha (α★): {best_alpha} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
 
 if __name__ == "__main__":
     main()
