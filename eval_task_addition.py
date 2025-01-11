@@ -16,14 +16,16 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 def load_task_vector(args, dataset_name):
-    """Load classification head (task vector) for a dataset."""
-    head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
+    """
+    Load the encoder task vector for the given dataset.
+    """
+    head_path = os.path.join(args.results_dir, f"{dataset_name}_finetuned.pt")  # ✅ Correct path to encoder
     if not os.path.exists(head_path):
-        raise FileNotFoundError(f"❌ Task vector not found: {head_path}")
+        raise FileNotFoundError(f"Task vector (encoder) not found: {head_path}")
 
-    torch.serialization.add_safe_globals({ClassificationHead, set})
-    print(f"🔄 Loading classification head for {dataset_name} from {head_path}")
-    return torch.load(head_path, map_location="cuda")
+    print(f"🔄 Loading encoder task vector for {dataset_name} from {head_path}")
+    return torch.load(head_path, map_location="cuda")  # ✅ Load the encoder (not the classification head)
+
 
 
 def resolve_dataset_path(args, dataset_name):
@@ -59,25 +61,23 @@ def evaluate_model(model, dataloader):
 
 
 def combine_task_vectors(task_vectors, alpha):
-    """Combine only the encoder parts of task vectors with scaling by alpha."""
+    """
+    Combine task vectors (encoder weights) with scaling by alpha.
+    """
     combined_vector = copy.deepcopy(task_vectors[0])
 
-    for vec_index, vec in enumerate(task_vectors[1:], start=1):
-        for (param_combined, param_vec) in zip(combined_vector.image_encoder.parameters(), vec.image_encoder.parameters()):
+    for vec in task_vectors[1:]:
+        for param_combined, param_vec in zip(combined_vector.parameters(), vec.parameters()):
             if param_combined.data.shape == param_vec.data.shape:
                 param_combined.data += param_vec.data
             else:
-                raise ValueError(
-                    f"❌ Shape mismatch in encoder at index {vec_index}: "
-                    f"{param_combined.shape} vs {param_vec.shape}"
-                )
+                print(f"⚠️ Skipping incompatible parameters: {param_combined.shape} vs {param_vec.shape}")
 
-    # Scale the combined encoder by alpha
-    for param in combined_vector.image_encoder.parameters():
+    for param in combined_vector.parameters():
         param.data *= alpha
 
-    print(f"🟢 Successfully combined encoder task vectors with alpha = {alpha}")
     return combined_vector
+
 
 
 
