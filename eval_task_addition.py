@@ -57,7 +57,9 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         val_loader = dataset.train_loader
 
        # Initialize combined_task_vector with the first task vector
-        combined_task_vector = task_vectors[0].clone()
+        import copy
+        combined_task_vector = copy.deepcopy(task_vectors[0])
+
         
         # Add the remaining task vectors
         for vec in task_vectors[1:]:
