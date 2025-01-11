@@ -63,7 +63,9 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         
         # Add the remaining task vectors
         for vec in task_vectors[1:]:
-            combined_task_vector += vec
+            for param_combined, param_vec in zip(combined_task_vector.parameters(), vec.parameters()):
+                param_combined.data += param_vec.data
+
         
         # Scale by alpha
         combined_task_vector *= alpha
