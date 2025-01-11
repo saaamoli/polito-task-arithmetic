@@ -21,6 +21,26 @@ def load_task_vector(args, dataset_name):
     # ✅ Load the classification head safely
     return torch.load(head_path, weights_only=True).cuda()
 
+def resolve_dataset_path(args, dataset_name):
+    """Resolves the correct dataset path for each dataset."""
+    base_path = args.data_location
+    dataset_name_lower = dataset_name.lower()
+
+    if dataset_name_lower == "dtd":
+        return os.path.join(base_path, "dtd")
+    elif dataset_name_lower == "eurosat":
+        return base_path
+    elif dataset_name_lower == "mnist":
+        return os.path.join(base_path, "MNIST", "raw")
+    elif dataset_name_lower == "gtsrb":
+        return os.path.join(base_path, "gtsrb")
+    elif dataset_name_lower == "resisc45":
+        return base_path
+    elif dataset_name_lower == "svhn":
+        return os.path.join(base_path, "svhn")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+
 def evaluate_model(model, dataloader):
     """Evaluate model accuracy on provided data loader."""
     correct, total = 0, 0
@@ -42,13 +62,6 @@ def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
     """Compute average normalized accuracy."""
     normalized_accs = [va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)]
     return np.mean(normalized_accs)
-
-def correct_dataset_path(dataset_name, base_path):
-    """Corrects the dataset path for each dataset."""
-    if dataset_name.lower() == "eurosat":
-        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Correct path for EuroSAT
-    else:
-        return os.path.join(base_path, dataset_name.lower())
 
 def combine_task_vectors(task_vectors, alpha):
     """Combine task vectors with scaling by alpha, handling shape mismatches."""
@@ -72,7 +85,7 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
     val_accuracies = []
 
     for dataset_name in datasets:
-        dataset_path = correct_dataset_path(dataset_name, args.data_location)  # ✅ Corrected dataset path
+        dataset_path = resolve_dataset_path(args, dataset_name)  # ✅ Corrected dataset path
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
@@ -130,7 +143,7 @@ def main():
     # ✅ Evaluate on test sets using α★
     test_accuracies = []
     for dataset_name in datasets:
-        dataset_path = correct_dataset_path(dataset_name, args.data_location)  # ✅ Corrected dataset path
+        dataset_path = resolve_dataset_path(args, dataset_name)  # ✅ Corrected dataset path
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
