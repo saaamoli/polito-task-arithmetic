@@ -59,25 +59,26 @@ def evaluate_model(model, dataloader):
 
 
 def combine_task_vectors(task_vectors, alpha):
-    """Combine task vectors with scaling by alpha, ensuring strict shape consistency."""
+    """Combine only the encoder parts of task vectors with scaling by alpha."""
     combined_vector = copy.deepcopy(task_vectors[0])
 
     for vec_index, vec in enumerate(task_vectors[1:], start=1):
-        for param_combined, param_vec in zip(combined_vector.parameters(), vec.parameters()):
+        for (param_combined, param_vec) in zip(combined_vector.image_encoder.parameters(), vec.image_encoder.parameters()):
             if param_combined.data.shape == param_vec.data.shape:
                 param_combined.data += param_vec.data
             else:
                 raise ValueError(
-                    f"❌ Shape mismatch while combining task vectors at index {vec_index}: "
+                    f"❌ Shape mismatch in encoder at index {vec_index}: "
                     f"{param_combined.shape} vs {param_vec.shape}"
                 )
 
-    # Apply scaling by alpha
-    for param in combined_vector.parameters():
+    # Scale the combined encoder by alpha
+    for param in combined_vector.image_encoder.parameters():
         param.data *= alpha
 
-    print(f"🟢 Successfully combined task vectors with alpha = {alpha}")
+    print(f"🟢 Successfully combined encoder task vectors with alpha = {alpha}")
     return combined_vector
+
 
 
 def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
