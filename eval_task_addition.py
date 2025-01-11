@@ -19,11 +19,12 @@ def load_task_vector(args, dataset_name):
     if not os.path.exists(head_path):
         raise FileNotFoundError(f"Task vector not found: {head_path}")
 
-    # ✅ Correctly allowlist ClassificationHead
-    torch.serialization.add_safe_globals({'ClassificationHead': ClassificationHead})
+    # ✅ Correctly allowlist the ClassificationHead class
+    torch.serialization.add_safe_globals({ClassificationHead})
 
     # ✅ Load the classification head safely
     return torch.load(head_path, weights_only=True).cuda()
+
 
 
 
