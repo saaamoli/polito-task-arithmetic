@@ -18,8 +18,7 @@ def load_task_vector(args, dataset_name):
     # ✅ Allowlist both ClassificationHead and set
     torch.serialization.add_safe_globals({ClassificationHead, set})
 
-    # ✅ Load the classification head safely
-    return torch.load(head_path, weights_only=True).cuda()
+    return torch.load(head_path, map_location="cuda")
 
 def resolve_dataset_path(args, dataset_name):
     """Resolves the correct dataset path for each dataset."""
@@ -91,17 +90,15 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         if dataset_name.lower() == "mnist":
             preprocess = transforms.Compose([
                 transforms.Resize((224, 224)),
-                transforms.Grayscale(num_output_channels=3),  # 🟢 Convert grayscale to RGB
+                transforms.Grayscale(num_output_channels=3),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
         else:
             preprocess = transforms.Compose([
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
 
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
@@ -116,7 +113,6 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
 
     avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
     return avg_norm_acc, val_accuracies
-
 
 def main():
     args = parse_arguments()
@@ -138,14 +134,12 @@ def main():
             data = json.load(file)
             best_accuracies.append(data['validation_accuracy'])
 
-    best_alpha = 0
-    best_avg_norm_acc = 0
+    best_alpha, best_avg_norm_acc = 0, 0
 
     for alpha in np.arange(0.0, 1.05, 0.05):
         avg_norm_acc, _ = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
         if avg_norm_acc > best_avg_norm_acc:
-            best_avg_norm_acc = avg_norm_acc
-            best_alpha = alpha
+            best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
 
     print(f"✅ Best alpha (α★): {best_alpha} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
 
@@ -157,17 +151,15 @@ def main():
         if dataset_name.lower() == "mnist":
             preprocess = transforms.Compose([
                 transforms.Resize((224, 224)),
-                transforms.Grayscale(num_output_channels=3),  # 🟢 Convert grayscale to RGB
+                transforms.Grayscale(num_output_channels=3),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
         else:
             preprocess = transforms.Compose([
                 transforms.Resize((224, 224)),
                 transforms.ToTensor(),
-                transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                     std=[0.229, 0.224, 0.225])
+                transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
             ])
 
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
@@ -194,7 +186,6 @@ def main():
         json.dump(results, f, indent=4)
 
     print(f"✅ Multi-task evaluation completed. Results saved to {save_path}")
-
 
 if __name__ == "__main__":
     main()
