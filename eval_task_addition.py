@@ -4,19 +4,14 @@ import torch
 import numpy as np
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
-from heads import get_classification_head
+from heads import get_classification_head, ClassificationHead
 from args import parse_arguments
 from torchvision import transforms
 import copy
 
-
-from heads import ClassificationHead  # ✅ Import the correct class
-import torch
-
 def load_task_vector(args, dataset_name):
     """Load classification head (task vector) for a dataset."""
     head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
-    
     if not os.path.exists(head_path):
         raise FileNotFoundError(f"Task vector not found: {head_path}")
 
@@ -25,12 +20,6 @@ def load_task_vector(args, dataset_name):
 
     # ✅ Load the classification head safely
     return torch.load(head_path, weights_only=True).cuda()
-
-
-
-
-
-
 
 def evaluate_model(model, dataloader):
     """Evaluate model accuracy on provided data loader."""
@@ -49,12 +38,17 @@ def evaluate_model(model, dataloader):
             total += labels.size(0)
     return correct / total
 
-
 def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
     """Compute average normalized accuracy."""
     normalized_accs = [va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)]
     return np.mean(normalized_accs)
 
+def correct_dataset_path(dataset_name, base_path):
+    """Corrects the dataset path for each dataset."""
+    if dataset_name.lower() == "eurosat":
+        return os.path.join(base_path, "EuroSAT_splits")  # ✅ Correct path for EuroSAT
+    else:
+        return os.path.join(base_path, dataset_name.lower())
 
 def combine_task_vectors(task_vectors, alpha):
     """Combine task vectors with scaling by alpha, handling shape mismatches."""
@@ -65,7 +59,6 @@ def combine_task_vectors(task_vectors, alpha):
             if param_combined.data.shape == param_vec.data.shape:
                 param_combined.data += param_vec.data
             else:
-                # Optional: Comment out if you don't want the warning
                 print(f"⚠️ Skipping incompatible parameters: {param_combined.shape} vs {param_vec.shape}")
 
     # Scale the combined vector by alpha
@@ -74,24 +67,21 @@ def combine_task_vectors(task_vectors, alpha):
 
     return combined_vector
 
-
 def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
     """Evaluate the model with a specific alpha on all validation datasets."""
     val_accuracies = []
 
     for dataset_name in datasets:
-        dataset_path = os.path.join(args.data_location, dataset_name.lower())
+        dataset_path = correct_dataset_path(dataset_name, args.data_location)  # ✅ Corrected dataset path
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         val_loader = dataset.train_loader
 
         combined_task_vector = combine_task_vectors(task_vectors, alpha)
-
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(encoder, head).cuda()
 
@@ -100,7 +90,6 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
 
     avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
     return avg_norm_acc, val_accuracies
-
 
 def main():
     args = parse_arguments()
@@ -141,12 +130,11 @@ def main():
     # ✅ Evaluate on test sets using α★
     test_accuracies = []
     for dataset_name in datasets:
-        dataset_path = os.path.join(args.data_location, dataset_name.lower())
+        dataset_path = correct_dataset_path(dataset_name, args.data_location)  # ✅ Corrected dataset path
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         test_loader = dataset.test_loader
@@ -173,7 +161,6 @@ def main():
         json.dump(results, f, indent=4)
 
     print(f"✅ Multi-task evaluation completed. Results saved to {save_path}")
-
 
 if __name__ == "__main__":
     main()
