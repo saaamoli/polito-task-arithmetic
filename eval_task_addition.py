@@ -92,20 +92,20 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
     print(f"\n🔍 Evaluating alpha = {alpha}")
     val_accuracies = []
 
-    # 🔄 Combine task vectors with alpha scaling
+    # 🔄 Combine and normalize task vectors
     combined_task_vector = combine_task_vectors(task_vectors, alpha)
 
-    # 🛠 Apply combined task vector to the encoder
+    # 🛠 Overwrite encoder parameters instead of adding
     with torch.no_grad():
         for param_encoder, param_combined in zip(encoder.parameters(), combined_task_vector.parameters()):
             if param_encoder.data.shape == param_combined.data.shape:
-                param_encoder.data = param_encoder.data + param_combined.data
+                param_encoder.data.copy_(param_combined.data)
             else:
                 print(f"⚠️ Skipping incompatible parameters: {param_encoder.shape} vs {param_combined.shape}")
 
-    # 🔍 Debug: Check if encoder weights are updated
+    # 🔍 Debug: Check encoder norm after update
     total_encoder_norm = sum(p.data.norm().item() for p in encoder.parameters())
-    print(f"🔎 Encoder norm after applying combined vector at alpha {alpha}: {total_encoder_norm:.4f}")
+    print(f"🔎 Encoder norm after overwriting with combined vector at alpha {alpha}: {total_encoder_norm:.4f}")
 
     for dataset_name in datasets:
         print(f"\n📊 Evaluating dataset: {dataset_name}")
@@ -121,10 +121,11 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         val_loader = dataset.train_loader
 
-        # 🛠 Use updated encoder with the dataset-specific classification head
+        # 🛠 Use updated encoder with dataset-specific classification head
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(encoder, head).cuda()
 
+        # 🕒 Progress log for each batch
         acc = evaluate_model(model, val_loader)
         print(f"✅ Accuracy on {dataset_name} at alpha {alpha}: {acc:.4f}")
         val_accuracies.append(acc)
@@ -132,6 +133,7 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
     avg_norm_acc = np.mean(val_accuracies)
     print(f"📈 Average normalized accuracy at alpha {alpha}: {avg_norm_acc:.4f}")
     return avg_norm_acc, val_accuracies
+
 
 
 def main():
