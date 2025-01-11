@@ -19,12 +19,15 @@ def load_task_vector(args, dataset_name):
     """
     Load the encoder task vector for the given dataset.
     """
-    head_path = os.path.join(args.results_dir, f"{dataset_name}_finetuned.pt")  # ✅ Correct path to encoder
-    if not os.path.exists(head_path):
-        raise FileNotFoundError(f"Task vector (encoder) not found: {head_path}")
+    # ✅ Corrected the path to checkpoints directory
+    checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
+    
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Task vector (encoder) not found: {checkpoint_path}")
+    
+    print(f"🔄 Loading encoder task vector for {dataset_name} from {checkpoint_path}")
+    return torch.load(checkpoint_path, map_location="cuda")  # ✅ Correctly loading encoder
 
-    print(f"🔄 Loading encoder task vector for {dataset_name} from {head_path}")
-    return torch.load(head_path, map_location="cuda")  # ✅ Load the encoder (not the classification head)
 
 
 
