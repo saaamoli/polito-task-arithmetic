@@ -11,6 +11,7 @@ import copy
 
 
 from heads import ClassificationHead  # ✅ Import the correct class
+import torch
 
 def load_task_vector(args, dataset_name):
     """Load classification head (task vector) for a dataset."""
@@ -19,11 +20,12 @@ def load_task_vector(args, dataset_name):
     if not os.path.exists(head_path):
         raise FileNotFoundError(f"Task vector not found: {head_path}")
 
-    # ✅ Correctly allowlist the ClassificationHead class
-    torch.serialization.add_safe_globals({ClassificationHead})
+    # ✅ Allowlist both ClassificationHead and set
+    torch.serialization.add_safe_globals({ClassificationHead, set})
 
     # ✅ Load the classification head safely
     return torch.load(head_path, weights_only=True).cuda()
+
 
 
 
