@@ -56,7 +56,16 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         val_loader = dataset.train_loader
 
-        combined_task_vector = sum(task_vectors) * alpha
+       # Initialize combined_task_vector with the first task vector
+        combined_task_vector = task_vectors[0].clone()
+        
+        # Add the remaining task vectors
+        for vec in task_vectors[1:]:
+            combined_task_vector += vec
+        
+        # Scale by alpha
+        combined_task_vector *= alpha
+
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(encoder + combined_task_vector, head).cuda()
 
