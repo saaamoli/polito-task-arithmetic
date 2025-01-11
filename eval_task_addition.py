@@ -88,13 +88,28 @@ def combine_task_vectors(task_vectors, alpha):
 
 
 def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
-    """Evaluate the model with a specific alpha on all datasets."""
-    print(f"\n🔍 Evaluating alpha = {alpha:.2f}")
+    """Evaluate the model with a specific alpha on all validation datasets."""
+    print(f"\n🔍 Evaluating alpha = {alpha}")
     val_accuracies = []
 
+    # 🔄 Combine task vectors with alpha scaling
+    combined_task_vector = combine_task_vectors(task_vectors, alpha)
+
+    # 🛠 Apply combined task vector to the encoder
+    with torch.no_grad():
+        for param_encoder, param_combined in zip(encoder.parameters(), combined_task_vector.parameters()):
+            if param_encoder.data.shape == param_combined.data.shape:
+                param_encoder.data = param_encoder.data + param_combined.data
+            else:
+                print(f"⚠️ Skipping incompatible parameters: {param_encoder.shape} vs {param_combined.shape}")
+
+    # 🔍 Debug: Check if encoder weights are updated
+    total_encoder_norm = sum(p.data.norm().item() for p in encoder.parameters())
+    print(f"🔎 Encoder norm after applying combined vector at alpha {alpha}: {total_encoder_norm:.4f}")
+
     for dataset_name in datasets:
+        print(f"\n📊 Evaluating dataset: {dataset_name}")
         dataset_path = resolve_dataset_path(args, dataset_name)
-        print(f"📊 Evaluating dataset: {dataset_name}")
 
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
@@ -106,16 +121,16 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         val_loader = dataset.train_loader
 
-        combined_task_vector = combine_task_vectors(task_vectors, alpha)
+        # 🛠 Use updated encoder with the dataset-specific classification head
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(encoder, head).cuda()
 
         acc = evaluate_model(model, val_loader)
-        print(f"✅ Accuracy on {dataset_name} at alpha {alpha:.2f}: {acc:.4f}")
+        print(f"✅ Accuracy on {dataset_name} at alpha {alpha}: {acc:.4f}")
         val_accuracies.append(acc)
 
     avg_norm_acc = np.mean(val_accuracies)
-    print(f"📈 Average accuracy at alpha {alpha:.2f}: {avg_norm_acc:.4f}")
+    print(f"📈 Average normalized accuracy at alpha {alpha}: {avg_norm_acc:.4f}")
     return avg_norm_acc, val_accuracies
 
 
