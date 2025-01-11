@@ -7,6 +7,7 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
+import copy
 
 
 def load_task_vector(args, dataset_name):
@@ -41,9 +42,23 @@ def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
     return np.mean(normalized_accs)
 
 
+def combine_task_vectors(task_vectors, alpha):
+    """Combine task vectors by adding their parameters."""
+    combined_vector = copy.deepcopy(task_vectors[0])
+    for vec in task_vectors[1:]:
+        for param_combined, param_vec in zip(combined_vector.parameters(), vec.parameters()):
+            if param_combined.shape == param_vec.shape:
+                param_combined.data += alpha * param_vec.data
+            else:
+                print(f"⚠️ Skipping incompatible parameters: {param_combined.shape} vs {param_vec.shape}")
+    return combined_vector
+
+
 def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
     """Evaluate the model with a specific alpha on all validation datasets."""
     val_accuracies = []
+
+    combined_task_vector = combine_task_vectors(task_vectors, alpha)
 
     for dataset_name in datasets:
         dataset_path = os.path.join(args.data_location, dataset_name.lower())
@@ -56,33 +71,22 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         val_loader = dataset.train_loader
 
-       # Initialize combined_task_vector with the first task vector
-        import copy
-        combined_task_vector = copy.deepcopy(task_vectors[0])
-
-        
-        # Add the remaining task vectors
-        for vec in task_vectors[1:]:
-            for param_combined, param_vec in zip(combined_task_vector.parameters(), vec.parameters()):
-                for param_combined, param_vec in zip(combined_task_vector.parameters(), vec.parameters()):
-                    if param_combined.data.shape == param_vec.data.shape:
-                        param_combined.data += param_vec.data
-                    else:
-                        print(f"⚠️ Skipping incompatible parameters with shapes {param_combined.data.shape} and {param_vec.data.shape}")
-
-
-        
-        # Scale by alpha
-        combined_task_vector *= alpha
-
         head = get_classification_head(args, dataset_name).cuda()
-        model = ImageClassifier(encoder + combined_task_vector, head).cuda()
+        model = ImageClassifier(encoder, head).cuda()
 
         acc = evaluate_model(model, val_loader)
         val_accuracies.append(acc)
 
     avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
     return avg_norm_acc, val_accuracies
+
+
+def save_results(results, save_path):
+    """Save evaluation results to a JSON file."""
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    with open(save_path, 'w') as f:
+        json.dump(results, f, indent=4)
+    print(f"✅ Results saved to {save_path}")
 
 
 def main():
@@ -122,6 +126,8 @@ def main():
 
     # Evaluate on test sets using α★
     test_accuracies = []
+    combined_task_vector = combine_task_vectors(task_vectors, best_alpha)
+
     for dataset_name in datasets:
         dataset_path = os.path.join(args.data_location, dataset_name.lower())
         preprocess = transforms.Compose([
@@ -133,9 +139,8 @@ def main():
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         test_loader = dataset.test_loader
 
-        combined_task_vector = sum(task_vectors) * best_alpha
         head = get_classification_head(args, dataset_name).cuda()
-        model = ImageClassifier(encoder + combined_task_vector, head).cuda()
+        model = ImageClassifier(encoder, head).cuda()
 
         acc = evaluate_model(model, test_loader)
         test_accuracies.append(acc)
@@ -151,8 +156,7 @@ def main():
     }
 
     save_path = os.path.join(args.results_dir, "multi_task_results.json")
-    with open(save_path, 'w') as f:
-        json.dump(results, f, indent=4)
+    save_results(results, save_path)
 
     print(f"✅ Multi-task evaluation completed. Results saved to {save_path}")
 
