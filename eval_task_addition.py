@@ -13,6 +13,29 @@ from task_vectors import NonLinearTaskVector  # ✅ Import task vector handling
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
+from modeling import ImageEncoder
+
+def save_pretrained_model(args):
+    """
+    Load the pre-trained model and save it as pretrained.pt.
+    """
+    save_path = os.path.join(args.checkpoints_path, "pretrained.pt")
+
+    if os.path.exists(save_path):
+        print(f"✅ Pre-trained model already exists at {save_path}")
+        return  # Skip if already exists
+
+    print("🔄 Saving the pre-trained model...")
+
+    # Load the pre-trained encoder
+    encoder = ImageEncoder(args).cuda()
+
+    # Save the model
+    encoder.save(save_path)
+
+    print(f"✅ Pre-trained model saved at {save_path}")
+
+
 
 def load_task_vector(args, dataset_name):
     checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
@@ -129,4 +152,12 @@ def main():
 
 
 if __name__ == "__main__":
+    args = parse_arguments()
+    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
+
+    # ✅ Save pre-trained model if missing
+    save_pretrained_model(args)
+
+    # ✅ Continue with multi-task evaluation
     main()
+
