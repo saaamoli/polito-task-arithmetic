@@ -54,13 +54,22 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     val_loader = get_dataloader(dataset, is_train=False, args=args)
 
     encoder = ImageEncoder(args).cuda()
+
+    # ✅ Check if the classification head exists
     head_path = os.path.join(args.save, f"head_{dataset_name}Val.pt")
     if not os.path.exists(head_path):
-        raise FileNotFoundError(f"Classification head for {dataset_name} not found at {head_path}")
-    head = torch.load(head_path).cuda()
-    
+        print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
+        head = get_classification_head(args, dataset_name).cuda()  # Auto-generate head
+        head.save(head_path)  # Save for future runs
+        print(f"✅ Generated and saved classification head at {head_path}")
+    else:
+        print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
+        head = torch.load(head_path).cuda()
+
     model = ImageClassifier(encoder, head).cuda()
-    for param in model.head.parameters():
+
+    # ✅ Freeze the classification head
+    for param in model.classification_head.parameters():
         param.requires_grad = False
 
     optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=1e-4)
