@@ -1,3 +1,37 @@
+import os
+import time
+import torch
+import sys
+
+# Add project root to Python path
+sys.path.append('/kaggle/working/polito-task-arithmetic')
+print("Python Path:", sys.path)
+
+from datasets.common import get_dataloader, maybe_dictionarize
+from datasets.registry import get_dataset
+from modeling import ImageClassifier, ImageEncoder
+from heads import get_classification_head
+from args import parse_arguments
+from torchvision import transforms
+
+def resolve_dataset_path(args, dataset_name):
+    base_path = args.data_location
+    dataset_name_lower = dataset_name.lower()
+    if dataset_name_lower == "dtd":
+        return os.path.join(base_path, "dtd")
+    elif dataset_name_lower == "eurosat":
+        return base_path
+    elif dataset_name_lower == "mnist":
+        return os.path.join(base_path, "MNIST", "raw")
+    elif dataset_name_lower == "gtsrb":
+        return os.path.join(base_path, "gtsrb")
+    elif dataset_name_lower == "resisc45":
+        return base_path
+    elif dataset_name_lower == "svhn":
+        return os.path.join(base_path, "svhn")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n==== Fine-tuning on {dataset_name} for {num_epochs} epochs ====\n")
 
@@ -80,3 +114,13 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(save_path)
     print(f"✅ Fine-tuned model saved to {save_path}")
+
+if __name__ == "__main__":
+    args = parse_arguments()
+    args.save = "/kaggle/working/checkpoints_updated"
+    args.lr = 1e-4
+    args.batch_size = 32
+
+    dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
+    for dataset_name, num_epochs in dataset_epochs.items():
+        fine_tune_on_dataset(args, dataset_name, num_epochs)
