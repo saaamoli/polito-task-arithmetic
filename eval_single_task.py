@@ -1,56 +1,39 @@
 import os
 import json
 import torch
+import numpy as np
+import warnings
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
+from task_vectors import NonLinearTaskVector  # ✅ Import task vector handling
+
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 
-def load_finetuned_model(args, dataset_name):
-    encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
+def load_task_vector(args, dataset_name):
+    checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Task vector not found: {checkpoint_path}")
     
-    if not os.path.exists(encoder_checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
-    
-    encoder = torch.load(encoder_checkpoint_path).cuda()
-
-    # ✅ Load or Generate the Classification Head
-    head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
-    if os.path.exists(head_path):
-        print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
-        head = torch.load(head_path).cuda()
-    else:
-        print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
-        head = get_classification_head(args, dataset_name).cuda()
-        head.save(head_path)
-        print(f"✅ Generated and saved classification head at {head_path}")
-
-    model = ImageClassifier(encoder, head).cuda()
-    
-    return model
-
+    print(f"🔄 Loading task vector for {dataset_name}")
+    return NonLinearTaskVector(pretrained_checkpoint=None, finetuned_checkpoint=checkpoint_path)
 
 
 def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
-    dataset_name_lower = dataset_name.lower()
-
-    if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")
-    elif dataset_name_lower == "eurosat":
-        return base_path
-    elif dataset_name_lower == "mnist":
-        return os.path.join(base_path, "MNIST", "raw")
-    elif dataset_name_lower == "gtsrb":
-        return os.path.join(base_path, "gtsrb")
-    elif dataset_name_lower == "resisc45":
-        return base_path
-    elif dataset_name_lower == "svhn":
-        return os.path.join(base_path, "svhn")
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+    dataset_paths = {
+        "dtd": os.path.join(base_path, "dtd"),
+        "eurosat": base_path,
+        "mnist": os.path.join(base_path, "MNIST", "raw"),
+        "gtsrb": os.path.join(base_path, "gtsrb"),
+        "resisc45": base_path,
+        "svhn": os.path.join(base_path, "svhn"),
+    }
+    return dataset_paths.get(dataset_name.lower(), None)
 
 
 def evaluate_model(model, dataloader):
@@ -58,85 +41,91 @@ def evaluate_model(model, dataloader):
     model.eval()
     with torch.no_grad():
         for batch in dataloader:
-            if isinstance(batch, dict):
-                inputs, labels = batch['images'].cuda(), batch['labels'].cuda()
-            elif isinstance(batch, (tuple, list)):
-                inputs, labels = batch[0].cuda(), batch[1].cuda()
-            else:
-                raise TypeError(f"Unexpected batch type: {type(batch)}")
-
+            inputs, labels = batch[0].cuda(), batch[1].cuda()
             outputs = model(inputs)
             _, preds = torch.max(outputs, 1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
-
     return correct / total
 
 
-def save_results(results, save_path):
-    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-    with open(save_path, 'w') as f:
-        json.dump(results, f, indent=4)
-    print(f"✅ Results saved to {save_path}")
+def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
+    normalized_accs = [va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)]
+    return np.mean(normalized_accs)
 
 
-def evaluate_and_save(args, dataset_name):
-    save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
-    if os.path.exists(save_path):
-        print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
-        return
+def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
+    val_accuracies = []
+    combined_vector = task_vectors[0] * alpha
+    for vec in task_vectors[1:]:
+        combined_vector += vec * alpha
 
-    dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = dataset_path
+    encoder = combined_vector.apply_to(encoder)
 
-    # ✅ Apply Grayscale to RGB conversion for MNIST
-    if dataset_name.lower() == "mnist":
+    for dataset_name in datasets:
+        dataset_path = resolve_dataset_path(args, dataset_name)
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
-            transforms.Grayscale(num_output_channels=3),  # 🟢 Convert grayscale to RGB
+            transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
             transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-    else:
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-        ])
+        dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
+        val_loader = dataset.train_loader
 
-    dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
-    val_loader = dataset.train_loader
-    test_loader = dataset.test_loader
+        head = get_classification_head(args, dataset_name).cuda()
+        model = ImageClassifier(encoder, head).cuda()
 
-    model = load_finetuned_model(args, dataset_name)
+        acc = evaluate_model(model, val_loader)
+        val_accuracies.append(acc)
 
-    val_acc = evaluate_model(model, val_loader)
-    test_acc = evaluate_model(model, test_loader)
+    return compute_average_normalized_accuracy(val_accuracies, best_accuracies), val_accuracies
 
-    results = {
-        "dataset": dataset_name,
-        "validation_accuracy": val_acc,
-        "test_accuracy": test_acc
-    }
 
-    save_results(results, save_path)
+def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
+    test_accuracies = []
+    combined_vector = task_vectors[0] * alpha
+    for vec in task_vectors[1:]:
+        combined_vector += vec * alpha
+
+    encoder = combined_vector.apply_to(encoder)
+
+    for dataset_name in datasets:
+        dataset_path = resolve_dataset_path(args, dataset_name)
+        dataset = get_dataset(f"{dataset_name}Test", None, dataset_path, args.batch_size)
+        test_loader = dataset.test_loader
+
+        head = get_classification_head(args, dataset_name).cuda()
+        model = ImageClassifier(encoder, head).cuda()
+
+        acc = evaluate_model(model, test_loader)
+        test_accuracies.append(acc)
+        print(f"✅ Test Accuracy on {dataset_name}: {acc:.4f}")
+
+    avg_test_acc = np.mean(test_accuracies)
+    print(f"📊 Average Absolute Accuracy on Test Sets: {avg_test_acc:.4f}")
 
 
 def main():
     args = parse_arguments()
-
     args.checkpoints_path = "/kaggle/working/checkpoints_updated"
     args.results_dir = "/kaggle/working/results"
     args.data_location = "/kaggle/working/datasets"
     args.batch_size = 32
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
+    encoder = ImageEncoder(args).cuda()
+    task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
 
-    for dataset_name in datasets:
-        print(f"\n--- Evaluating {dataset_name} ---")
-        evaluate_and_save(args, dataset_name)
+    best_accuracies = [json.load(open(os.path.join(args.results_dir, f"{ds}_results.json")))['validation_accuracy'] for ds in datasets]
+
+    best_alpha, best_avg_norm_acc = 0, 0
+    for alpha in np.arange(0.0, 1.05, 0.05):
+        avg_norm_acc, _ = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
+        if avg_norm_acc > best_avg_norm_acc:
+            best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
+
+    evaluate_on_test(args, encoder, task_vectors, datasets, best_alpha)
 
 
 if __name__ == "__main__":
