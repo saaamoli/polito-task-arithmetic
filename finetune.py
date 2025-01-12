@@ -40,11 +40,20 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
         print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
         return
 
-    preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+    # ✅ MNIST Grayscale to RGB Fix
+    if dataset_name.lower() == "mnist":
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(num_output_channels=3),  # ✅ Convert grayscale to RGB
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+    else:
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
     base_dataset_path = resolve_dataset_path(args, dataset_name)
     args.data_location = base_dataset_path
@@ -74,8 +83,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
     optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=1e-4)
     criterion = torch.nn.CrossEntropyLoss()
-
-    # 🔥 Removed early stopping logic
 
     for epoch in range(num_epochs):
         model.train()
