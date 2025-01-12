@@ -40,25 +40,11 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
         print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
         return
 
-    # ✅ Data Augmentation for Training
-    if dataset_name.lower() == "mnist":
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.Grayscale(num_output_channels=3),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
-    else:
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(15),
-            transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-        ])
+    preprocess = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
 
     base_dataset_path = resolve_dataset_path(args, dataset_name)
     args.data_location = base_dataset_path
@@ -68,12 +54,16 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     val_loader = get_dataloader(dataset, is_train=False, args=args)
 
     encoder = ImageEncoder(args).cuda()
-    head = get_classification_head(args, f"{dataset_name}Val").cuda()
+    head_path = os.path.join(args.save, f"head_{dataset_name}Val.pt")
+    if not os.path.exists(head_path):
+        raise FileNotFoundError(f"Classification head for {dataset_name} not found at {head_path}")
+    head = torch.load(head_path).cuda()
+    
     model = ImageClassifier(encoder, head).cuda()
-    model.freeze_head()
+    for param in model.head.parameters():
+        param.requires_grad = False
 
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=1e-4)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1)
+    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=1e-4)
     criterion = torch.nn.CrossEntropyLoss()
 
     best_val_loss = float('inf')
@@ -94,9 +84,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
             epoch_loss += loss.item()
 
-        scheduler.step()
-
-        # ✅ Validation Phase
         model.eval()
         val_loss, correct, total = 0.0, 0, 0
         with torch.no_grad():
@@ -115,7 +102,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 
         print(f"Epoch {epoch+1}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
 
-        # ✅ Early Stopping
         if avg_val_loss < best_val_loss:
             best_val_loss = avg_val_loss
             early_stop_counter = 0
@@ -125,7 +111,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
                 print(f"⚠️ Early stopping triggered at epoch {epoch+1}")
                 break
 
-    save_path = os.path.join(args.save, f"{dataset_name}_finetuned_v2.pt")
+    save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(save_path)
     print(f"✅ Fine-tuned model saved to {save_path}")
