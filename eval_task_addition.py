@@ -58,62 +58,16 @@ def evaluate_model(model, dataloader):
     return correct / total
 
 
-def normalize_vector(vector):
-    """Normalize task vector to prevent scaling issues."""
-    with torch.no_grad():
-        for param in vector.parameters():
-            norm = param.data.norm()
-            if norm > 0:
-                param.data /= norm
-
-
-def combine_task_vectors(task_vectors, alpha):
-    """
-    Combine task vectors with proper scaling by alpha.
-    """
-    combined_vector = copy.deepcopy(task_vectors[0])
-    normalize_vector(combined_vector)
-
-    for vec_idx, vec in enumerate(task_vectors[1:], start=1):
-        normalize_vector(vec)
-        for param_combined, param_vec in zip(combined_vector.parameters(), vec.parameters()):
-            if param_combined.data.shape == param_vec.data.shape:
-                param_combined.data += alpha * param_vec.data
-            else:
-                print(f"⚠️ Skipping incompatible parameters at index {vec_idx}: {param_combined.shape} vs {param_vec.shape}")
-
-    total_norm = sum(p.data.norm().item() for p in combined_vector.parameters())
-    print(f"🔎 Combined vector norm at alpha {alpha}: {total_norm:.4f}")
-
-    return combined_vector
-
-
-def blend_with_encoder(encoder, combined_vector, alpha):
-    """Blend combined task vector with the encoder."""
-    with torch.no_grad():
-        for param_encoder, param_combined in zip(encoder.parameters(), combined_vector.parameters()):
-            if param_encoder.data.shape == param_combined.data.shape:
-                param_encoder.data = (1 - alpha) * param_encoder.data + alpha * param_combined.data
-            else:
-                print(f"⚠️ Skipping incompatible parameters: {param_encoder.shape} vs {param_combined.shape}")
-
-
-def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
-    """Compute average normalized accuracy based on the project formula."""
-    normalized_accs = [va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)]
-    return np.mean(normalized_accs)
-
-
-def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
-    """Evaluate the model with a specific alpha on all validation datasets."""
-    print(f"\n🔍 Evaluating alpha = {alpha}")
-    val_accuracies = []
-
-    combined_task_vector = combine_task_vectors(task_vectors, alpha)
+def evaluate_on_split(args, encoder, datasets, alpha, split_type="val"):
+    """Evaluate the model on validation or test split."""
+    accuracies = []
+    combined_task_vector = combine_task_vectors(
+        [load_task_vector(args, ds) for ds in datasets], alpha
+    )
     blend_with_encoder(encoder, combined_task_vector, alpha)
 
     for dataset_name in datasets:
-        print(f"\n📊 Evaluating dataset: {dataset_name}")
+        print(f"📊 Evaluating {split_type} set of {dataset_name} at alpha {alpha}")
         dataset_path = resolve_dataset_path(args, dataset_name)
 
         preprocess = transforms.Compose([
@@ -124,33 +78,36 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
         ])
 
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
-        val_loader = dataset.train_loader
+        dataloader = dataset.train_loader if split_type == "val" else dataset.test_loader
 
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(encoder, head).cuda()
 
-        acc = evaluate_model(model, val_loader)
-        print(f"✅ Accuracy on {dataset_name} at alpha {alpha}: {acc:.4f}")
-        val_accuracies.append(acc)
+        acc = evaluate_model(model, dataloader)
+        print(f"✅ {split_type.capitalize()} Accuracy on {dataset_name}: {acc:.4f}")
+        accuracies.append(acc)
 
-    avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
-    print(f"📈 Average normalized accuracy at alpha {alpha}: {avg_norm_acc:.4f}")
-    return avg_norm_acc, val_accuracies
+    return accuracies
+
+
+def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
+    """Compute average normalized accuracy based on Equation 2."""
+    normalized_accs = [va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)]
+    return np.mean(normalized_accs)
 
 
 def main():
     args = parse_arguments()
-    args.checkpoints_path = "/kaggle/working/checkpoints"
+    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
     args.results_dir = "/kaggle/working/results"
     args.data_location = "/kaggle/working/datasets"
     args.batch_size = 32
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
-    print("🚀 Starting multi-task evaluation...")
     encoder = ImageEncoder(args).cuda()
-    task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
 
+    # Load best validation accuracies
     best_accuracies = []
     for dataset in datasets:
         result_path = os.path.join(args.results_dir, f"{dataset}_results.json")
@@ -158,16 +115,36 @@ def main():
             data = json.load(file)
             best_accuracies.append(data['validation_accuracy'])
 
+    # 🔍 Find best alpha
     best_alpha, best_avg_norm_acc = 0, 0
-
     for alpha in np.arange(0.0, 1.05, 0.05):
-        avg_norm_acc, _ = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
+        val_accuracies = evaluate_on_split(args, encoder, datasets, alpha, split_type="val")
+        avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
         if avg_norm_acc > best_avg_norm_acc:
             best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
 
     print(f"\n🏆 Best alpha (α★): {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
-    print("✅ Multi-task evaluation completed.")
+
+    # ✅ Evaluate on test set with best α★
+    test_accuracies = evaluate_on_split(args, encoder, datasets, best_alpha, split_type="test")
+    avg_abs_acc = np.mean(test_accuracies)
+    avg_norm_acc = compute_average_normalized_accuracy(test_accuracies, best_accuracies)
+
+    # 💾 Save results
+    final_results = {
+        "best_alpha": best_alpha,
+        "average_absolute_accuracy": avg_abs_acc,
+        "average_normalized_accuracy": avg_norm_acc,
+        "test_accuracies": {datasets[i]: acc for i, acc in enumerate(test_accuracies)}
+    }
+
+    os.makedirs(args.results_dir, exist_ok=True)
+    results_path = os.path.join(args.results_dir, "multi_task_results.json")
+    with open(results_path, 'w') as f:
+        json.dump(final_results, f, indent=4)
+    print(f"✅ Final multi-task results saved to {results_path}")
 
 
 if __name__ == "__main__":
     main()
+
