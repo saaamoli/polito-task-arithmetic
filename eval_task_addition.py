@@ -61,10 +61,14 @@ def evaluate_model(model, dataloader):
 def evaluate_on_split(args, encoder, datasets, alpha, split_type="val"):
     """Evaluate the model on validation or test split."""
     accuracies = []
-    combined_task_vector = combined_task_vector(
+
+    # ✅ Correct function call to combine task vectors
+    combined_vector = combine_task_vectors(
         [load_task_vector(args, ds) for ds in datasets], alpha
     )
-    blend_with_encoder(encoder, combined_task_vector, alpha)
+
+    # ✅ Proper blending with encoder
+    blend_with_encoder(encoder, combined_vector, alpha)
 
     for dataset_name in datasets:
         print(f"📊 Evaluating {split_type} set of {dataset_name} at alpha {alpha}")
@@ -88,6 +92,7 @@ def evaluate_on_split(args, encoder, datasets, alpha, split_type="val"):
         accuracies.append(acc)
 
     return accuracies
+
 
 
 def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
