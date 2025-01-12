@@ -15,10 +15,22 @@ def load_finetuned_model(args, dataset_name):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
     
     encoder = torch.load(encoder_checkpoint_path).cuda()
-    head = get_classification_head(args, dataset_name).cuda()
+
+    # ✅ Load or Generate the Classification Head
+    head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
+    if os.path.exists(head_path):
+        print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
+        head = torch.load(head_path).cuda()
+    else:
+        print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
+        head = get_classification_head(args, dataset_name).cuda()
+        head.save(head_path)
+        print(f"✅ Generated and saved classification head at {head_path}")
+
     model = ImageClassifier(encoder, head).cuda()
     
     return model
+
 
 
 def resolve_dataset_path(args, dataset_name):
@@ -115,7 +127,7 @@ def evaluate_and_save(args, dataset_name):
 def main():
     args = parse_arguments()
 
-    args.checkpoints_path = "/kaggle/working/checkpoints"
+    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
     args.results_dir = "/kaggle/working/results"
     args.data_location = "/kaggle/working/datasets"
     args.batch_size = 32
