@@ -102,7 +102,7 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
 
 def main():
     args = parse_arguments()
-    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
+    args.checkpoints_path = "/kaggle/working/checkpoints"
     args.data_location = "/kaggle/working/datasets"
     args.results_dir = "/kaggle/working/results"
     args.batch_size = 32
