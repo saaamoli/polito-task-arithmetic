@@ -131,7 +131,7 @@ def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
 
 def main():
     args = parse_arguments()
-    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
+    args.checkpoints_path = "/kaggle/working/checkpoints"
     args.results_dir = "/kaggle/working/results"
     args.data_location = "/kaggle/working/datasets"
     args.batch_size = 32
