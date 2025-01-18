@@ -157,6 +157,9 @@ def main():
     # ✅ Ensure pretrained model is saved
     save_pretrained_model(args)
 
+    # ✅ Initialize the encoder (Fix)
+    encoder = ImageEncoder(args).cuda()  # 🔥 This line was missing
+
     # ✅ Load task vectors
     task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
 
@@ -173,7 +176,7 @@ def main():
     print(f"🏆 Best Alpha (α★): {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
    
     # ✅ Evaluate on test datasets using the best alpha
-    evaluate_on_test(args, None, task_vectors, datasets, best_alpha)
+    evaluate_on_test(args, encoder, task_vectors, datasets, best_alpha)  # 🔥 Pass the encoder here
 
 if __name__ == "__main__":
     main()
