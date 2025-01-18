@@ -166,7 +166,7 @@ def main():
     # 🔎 Search for the best alpha
     best_alpha, best_avg_norm_acc = 0, 0
     for alpha in np.arange(0.0, 1.05, 0.05):
-        avg_norm_acc = evaluate_alpha(args, None, task_vectors, datasets, alpha, best_accuracies)
+        avg_norm_acc, _ = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
         if avg_norm_acc > best_avg_norm_acc:
             best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
 
