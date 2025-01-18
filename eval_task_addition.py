@@ -74,13 +74,23 @@ def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
 
 
 def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
-    """Evaluate the model for a specific alpha value."""
-    combined_vector = sum(vec * alpha for vec in task_vectors)
+    """Evaluate the model for a specific alpha value on the validation set."""
+    print(f"\n🔍 Evaluating alpha = {alpha:.2f}")
+
+    # ✅ Combine task vectors using the current alpha
+    combined_vector = task_vectors[0] * alpha
+    for vec in task_vectors[1:]:
+        combined_vector += vec * alpha
+
+    # ✅ Apply the combined task vector to the pre-trained encoder
     blended_encoder = combined_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
 
     val_accuracies = []
+
     for dataset_name in datasets:
         dataset_path = resolve_dataset_path(args, dataset_name)
+
+        # ✅ Apply grayscale-to-RGB conversion for MNIST
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -96,8 +106,43 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
 
         acc = evaluate_model(model, val_loader)
         val_accuracies.append(acc)
+        print(f"📊 Validation Accuracy for {dataset_name}: {acc:.4f}")
 
-    return compute_average_normalized_accuracy(val_accuracies, best_accuracies)
+    # ✅ Compute and return the average normalized accuracy
+    avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
+    print(f"📈 Average Normalized Accuracy at alpha {alpha:.2f}: {avg_norm_acc:.4f}")
+    return avg_norm_acc, val_accuracies
+
+def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
+    """Evaluate the model on test datasets using the best alpha and compute the average absolute accuracy."""
+    print(f"\n🧪 Evaluating on Test Datasets with α = {alpha:.2f}")
+
+    # ✅ Combine task vectors for the best alpha
+    combined_vector = task_vectors[0] * alpha
+    for vec in task_vectors[1:]:
+        combined_vector += vec * alpha
+
+    blended_encoder = combined_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
+
+    test_accuracies = []
+
+    for dataset_name in datasets:
+        dataset_path = resolve_dataset_path(args, dataset_name)
+
+        dataset = get_dataset(f"{dataset_name}Test", None, dataset_path, args.batch_size)
+        test_loader = dataset.test_loader
+
+        head = get_classification_head(args, dataset_name).cuda()
+        model = ImageClassifier(blended_encoder, head).cuda()
+
+        acc = evaluate_model(model, test_loader)
+        test_accuracies.append(acc)
+        print(f"✅ Test Accuracy for {dataset_name}: {acc:.4f}")
+
+    # ✅ Compute and print the average absolute accuracy (Equation 1)
+    avg_absolute_acc = np.mean(test_accuracies)
+    print(f"\n📊 **Average Absolute Accuracy on Test Sets**: {avg_absolute_acc:.4f}")
+    return avg_absolute_acc
 
 
 def main():
@@ -126,7 +171,9 @@ def main():
             best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
 
     print(f"🏆 Best Alpha (α★): {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
-
+   
+    # ✅ Evaluate on test datasets using the best alpha
+    evaluate_on_test(args, None, task_vectors, datasets, best_alpha)
 
 if __name__ == "__main__":
     main()
