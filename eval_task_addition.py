@@ -129,8 +129,9 @@ def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
     for dataset_name in datasets:
         dataset_path = resolve_dataset_path(args, dataset_name)
 
-        dataset = get_dataset(f"{dataset_name}Test", None, dataset_path, args.batch_size)
-        test_loader = dataset.test_loader
+        # ✅ Fix: Remove 'Test' suffix
+        dataset = get_dataset(dataset_name, None, dataset_path, args.batch_size)  # 🔥 Use dataset_name directly
+        test_loader = dataset.test_loader  # Ensure test_loader is defined in your dataset object
 
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(blended_encoder, head).cuda()
@@ -143,6 +144,7 @@ def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
     avg_absolute_acc = np.mean(test_accuracies)
     print(f"\n📊 **Average Absolute Accuracy on Test Sets**: {avg_absolute_acc:.4f}")
     return avg_absolute_acc
+
 
 
 def main():
