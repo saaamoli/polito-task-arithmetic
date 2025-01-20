@@ -15,15 +15,16 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 
 def save_pretrained_model(args):
-    """Save the pre-trained encoder if not already saved."""
     save_path = os.path.join(args.checkpoints_path, "pretrained.pt")
-    if not os.path.exists(save_path):
-        print("🔄 Saving the pre-trained model...")
-        encoder = ImageEncoder(args).cuda()
-        encoder.save(save_path)
-        print(f"✅ Pre-trained model saved at {save_path}")
-    else:
-        print(f"✅ Pre-trained model already exists at {save_path}")
+    if os.path.exists(save_path):
+        print(f"✅ Pre-trained model already exists at {save_path}. Skipping...")
+        return False  # Indicates no need to re-save
+    print("🔄 Saving the pre-trained model...")
+    encoder = ImageEncoder(args).cuda()
+    encoder.save(save_path)
+    print(f"✅ Pre-trained model saved at {save_path}")
+    return True  # Indicates model was saved
+
 
 
 def load_task_vector(args, dataset_name):
@@ -130,7 +131,14 @@ def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
         dataset_path = resolve_dataset_path(args, dataset_name)
 
         # ✅ Fix: Remove 'Test' suffix
-        dataset = get_dataset(dataset_name, None, dataset_path, args.batch_size)  # 🔥 Use dataset_name directly
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
+
         test_loader = dataset.test_loader  # Ensure test_loader is defined in your dataset object
 
         head = get_classification_head(args, dataset_name).cuda()
@@ -169,13 +177,36 @@ def main():
     best_accuracies = [json.load(open(os.path.join(args.results_dir, f"{ds}_results.json")))['validation_accuracy'] for ds in datasets]
 
     # 🔎 Search for the best alpha
+    # 🔎 Search for the best alpha
     best_alpha, best_avg_norm_acc = 0, 0
+    progress_file = os.path.join(args.results_dir, "progress.json")
+    
+    # Load progress if it exists
+    if os.path.exists(progress_file):
+        with open(progress_file, "r") as f:
+            progress = json.load(f)
+            best_alpha = progress.get("best_alpha", 0)
+            best_avg_norm_acc = progress.get("best_avg_norm_acc", 0)
+            print(f"🔄 Resuming from α = {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
+    else:
+        progress = {}
+    
     for alpha in np.arange(0.0, 1.05, 0.05):
+        if alpha <= best_alpha:  # Skip already evaluated alphas
+            continue
+    
         avg_norm_acc, _ = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
         if avg_norm_acc > best_avg_norm_acc:
             best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
-
+            progress["best_alpha"] = best_alpha
+            progress["best_avg_norm_acc"] = best_avg_norm_acc
+    
+        # Save progress after each alpha evaluation
+        with open(progress_file, "w") as f:
+            json.dump(progress, f)
+    
     print(f"🏆 Best Alpha (α★): {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
+
    
     # ✅ Evaluate on test datasets using the best alpha
     evaluate_on_test(args, encoder, task_vectors, datasets, best_alpha)  # 🔥 Pass the encoder here
