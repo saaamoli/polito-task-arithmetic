@@ -19,7 +19,7 @@ def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")
+        return base_path  # Remove the extra "dtd" appending
     elif dataset_name_lower == "eurosat":
         return base_path
     elif dataset_name_lower == "mnist":
@@ -32,6 +32,7 @@ def resolve_dataset_path(args, dataset_name):
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
 
 def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
     print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
