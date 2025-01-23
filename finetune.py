@@ -55,24 +55,43 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
- base_dataset_path = resolve_dataset_path(args, dataset_name)
+base_dataset_path = resolve_dataset_path(args, dataset_name)
 
 if dataset_name.lower() == "dtd":
     train_loader = get_dataloader(
-        get_dataset("DTDTrain", preprocess=preprocess, location=base_dataset_path["train"], batch_size=batch_size, num_workers=2),
+        get_dataset(
+            "DTDTrain",
+            preprocess=preprocess,
+            location=base_dataset_path["train"],
+            batch_size=batch_size,
+            num_workers=2
+        ),
         is_train=True,
         args=args,
     )
     val_loader = get_dataloader(
-        get_dataset("DTDVal", preprocess=preprocess, location=base_dataset_path["val"], batch_size=batch_size, num_workers=2),
+        get_dataset(
+            "DTDVal",
+            preprocess=preprocess,
+            location=base_dataset_path["val"],
+            batch_size=batch_size,
+            num_workers=2
+        ),
         is_train=False,
         args=args,
     )
 else:
     args.data_location = base_dataset_path
-    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=args.data_location, batch_size=batch_size, num_workers=2)
+    dataset = get_dataset(
+        f"{dataset_name}Val",
+        preprocess=preprocess,
+        location=args.data_location,
+        batch_size=batch_size,
+        num_workers=2
+    )
     train_loader = get_dataloader(dataset, is_train=True, args=args)
     val_loader = get_dataloader(dataset, is_train=False, args=args)
+
 
 
     encoder = ImageEncoder(args).cuda()
