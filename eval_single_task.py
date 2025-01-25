@@ -81,7 +81,14 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
         if total_samples >= 2000:  # Limit the number of samples to 2000 as per requirements
             break
 
-        inputs, labels = batch['images'].to(device), batch['labels'].to(device)
+        # Handle different batch formats
+        if isinstance(batch, dict):  # If the batch is a dictionary
+            inputs, labels = batch['images'].to(device), batch['labels'].to(device)
+        elif isinstance(batch, (list, tuple)):  # If the batch is a list or tuple
+            inputs, labels = batch[0].to(device), batch[1].to(device)
+        else:
+            raise TypeError(f"Unexpected batch type: {type(batch)}")
+
         model.zero_grad()  # Reset gradients
         outputs = model(inputs)
 
@@ -108,6 +115,7 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
 
     fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))
     return fim_log_trace.item()
+
 
 
 def save_results(results, save_path):
