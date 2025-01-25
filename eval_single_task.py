@@ -127,14 +127,17 @@ def evaluate_and_save(args, dataset_name):
 def main():
     args = parse_arguments()
 
-    args.checkpoints_path = "/kaggle/working/checkpoints"
+    # Define necessary paths
+    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
     args.results_dir = "/kaggle/working/results"
     args.data_location = "/kaggle/working/datasets"
+    args.save = "/kaggle/working/checkpoints_updated"  # Add this line to set args.save
     args.batch_size = 32
-    args.save = "/kaggle/working/checkpoints_updated"  # Add this line
 
+    # List of datasets to evaluate
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
+    # Evaluate and save results for each dataset
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
         evaluate_and_save(args, dataset_name)
