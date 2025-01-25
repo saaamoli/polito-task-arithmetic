@@ -131,12 +131,14 @@ def main():
     args.results_dir = "/kaggle/working/results"
     args.data_location = "/kaggle/working/datasets"
     args.batch_size = 32
+    args.save = "/kaggle/working/checkpoints_updated"  # Add this line
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
         evaluate_and_save(args, dataset_name)
+
 
 
 if __name__ == "__main__":
