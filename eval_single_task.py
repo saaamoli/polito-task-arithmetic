@@ -70,50 +70,45 @@ def evaluate_model(model, dataloader):
 
     return correct / total
 
-def compute_fim_log_trace(model, dataloader, criterion, device="cuda", samples_to_use=2000):
-    model.eval()
-    model.to(device)
-
-    fim_diag = {}
+def compute_fim_log_trace(model, dataloader, criterion, device):
+    fim = {}
     for name, param in model.named_parameters():
         if param.requires_grad:
-            fim_diag[name] = torch.zeros_like(param).to(device)
+            fim[name] = torch.zeros_like(param)
 
-    seen_samples = 0
-    progress_bar = tqdm(total=samples_to_use, desc="Computing FIM")
+    total_samples = 0
+    for batch in tqdm(dataloader, desc="Computing FIM"):
+        if total_samples >= 2000:  # Limit the number of samples to 2000 as per requirements
+            break
 
-    with torch.no_grad():
-        for batch in dataloader:
-            if seen_samples >= samples_to_use:
-                break
+        inputs, labels = batch['images'].to(device), batch['labels'].to(device)
+        model.zero_grad()  # Reset gradients
+        outputs = model(inputs)
 
-            data = maybe_dictionarize(batch)
-            inputs, labels = data["images"].to(device), data["labels"].to(device)
+        # Compute the loss
+        loss = criterion(outputs, labels)
+        
+        # Ensure the loss requires gradient
+        if not loss.requires_grad:
+            raise ValueError("Loss does not require gradients. Check the computation graph.")
+        
+        # Compute gradients with respect to model parameters
+        loss.backward(retain_graph=True)
 
-            # Forward pass
-            outputs = model(inputs)
-            loss = criterion(outputs, labels)
+        for name, param in model.named_parameters():
+            if param.requires_grad and param.grad is not None:
+                fim[name] += param.grad.pow(2)
 
-            # Compute gradients
-            model.zero_grad()
-            loss.backward(retain_graph=True)
+        total_samples += inputs.size(0)
 
-            # Accumulate squared gradients
-            for name, param in model.named_parameters():
-                if param.requires_grad and param.grad is not None:
-                    fim_diag[name] += (param.grad ** 2)
+    # Compute the log-trace of FIM
+    fim_trace = 0.0
+    for name, fim_value in fim.items():
+        fim_trace += fim_value.sum().item()
 
-            seen_samples += len(inputs)
-            progress_bar.update(len(inputs))
+    fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))
+    return fim_log_trace.item()
 
-    progress_bar.close()
-
-    # Compute trace
-    fim_trace = sum([fim.sum().item() for fim in fim_diag.values()])
-    fim_trace /= samples_to_use  # Average over samples
-    log_trace = np.log(fim_trace)
-
-    return log_trace
 
 def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
