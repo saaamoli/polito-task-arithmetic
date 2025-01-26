@@ -77,12 +77,17 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             fim[name] = torch.zeros_like(param)
 
     total_samples = 0
-    max_samples = min(2000, len(dataloader.dataset))  # Ensure we don't exceed the dataset size
+    max_samples = 2000  # Desired number of samples for FIM computation
+    dataloader_iterator = iter(dataloader)  # Create an iterator for looping through the dataloader
 
-    for batch in tqdm(dataloader, desc="Computing FIM"):
-        # Exit if we've processed enough samples
-        if total_samples >= max_samples:
-            break
+    print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
+    while total_samples < max_samples:
+        try:
+            batch = next(dataloader_iterator)  # Get the next batch
+        except StopIteration:
+            # Restart the iterator if we run out of batches
+            dataloader_iterator = iter(dataloader)
+            batch = next(dataloader_iterator)
 
         # Handle different batch formats
         if isinstance(batch, dict):  
@@ -112,15 +117,12 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
                 fim[name] += param.grad.pow(2)
 
         total_samples += inputs.size(0)
-
-    if total_samples == 0:
-        raise ValueError("No samples were processed. Check the dataloader or dataset.")
+        if total_samples >= max_samples:
+            print(f"Processed {total_samples} samples for FIM computation.")
+            break
 
     # Compute the log-trace of FIM
-    fim_trace = 0.0
-    for name, fim_value in fim.items():
-        fim_trace += fim_value.sum().item()
-
+    fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
     fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))
     return fim_log_trace.item()
 
