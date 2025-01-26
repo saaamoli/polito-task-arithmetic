@@ -77,36 +77,44 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             fim[name] = torch.zeros_like(param)
 
     total_samples = 0
+    max_samples = min(2000, len(dataloader.dataset))  # Ensure we don't exceed the dataset size
+
     for batch in tqdm(dataloader, desc="Computing FIM"):
-        if total_samples >= 2000:  # Limit the number of samples to 2000 as per requirements
+        # Exit if we've processed enough samples
+        if total_samples >= max_samples:
             break
 
         # Handle different batch formats
-        if isinstance(batch, dict):  # If the batch is a dictionary
+        if isinstance(batch, dict):  
             inputs, labels = batch['images'].to(device), batch['labels'].to(device)
-        elif isinstance(batch, (list, tuple)):  # If the batch is a list or tuple
+        elif isinstance(batch, (list, tuple)):  
             inputs, labels = batch[0].to(device), batch[1].to(device)
         else:
             raise TypeError(f"Unexpected batch type: {type(batch)}")
 
-        model.zero_grad()  # Reset gradients
+        # Reset gradients
+        model.zero_grad()
+
+        # Forward pass
         outputs = model(inputs)
 
-        # Compute the loss
+        # Compute loss
         loss = criterion(outputs, labels)
-
-        # Ensure the loss requires gradient
         if not loss.requires_grad:
             raise ValueError("Loss does not require gradients. Check the computation graph.")
 
-        # Compute gradients with respect to model parameters
+        # Backward pass
         loss.backward(retain_graph=True)
 
+        # Accumulate FIM values
         for name, param in model.named_parameters():
             if param.requires_grad and param.grad is not None:
                 fim[name] += param.grad.pow(2)
 
         total_samples += inputs.size(0)
+
+    if total_samples == 0:
+        raise ValueError("No samples were processed. Check the dataloader or dataset.")
 
     # Compute the log-trace of FIM
     fim_trace = 0.0
@@ -115,6 +123,7 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
 
     fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))
     return fim_log_trace.item()
+
 
 def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
