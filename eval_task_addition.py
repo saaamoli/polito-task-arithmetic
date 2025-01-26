@@ -1,15 +1,46 @@
 import os
-import torch
 import json
+import torch
 import numpy as np
-from tqdm import tqdm
+import warnings
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
+from task_vectors import NonLinearTaskVector
+
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
+def save_pretrained_model(args):
+    save_path = os.path.join(args.checkpoints_path, "pretrained.pt")
+    if os.path.exists(save_path):
+        print(f"✅ Pre-trained model already exists at {save_path}. Skipping...")
+        return False  # Indicates no need to re-save
+    print("🔄 Saving the pre-trained model...")
+    encoder = ImageEncoder(args).cuda()
+    encoder.save(save_path)
+    print(f"✅ Pre-trained model saved at {save_path}")
+    return True  # Indicates model was saved
+
+
+def load_task_vector(args, dataset_name):
+    """Load the task vector for a dataset using pre-trained and fine-tuned models."""
+    pretrained_checkpoint = os.path.join(args.checkpoints_path, "pretrained.pt")
+    finetuned_checkpoint = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
+
+    if not os.path.exists(pretrained_checkpoint):
+        raise FileNotFoundError(f"Pre-trained checkpoint not found at {pretrained_checkpoint}")
+    if not os.path.exists(finetuned_checkpoint):
+        raise FileNotFoundError(f"Fine-tuned checkpoint not found at {finetuned_checkpoint}")
+
+    print(f"🔄 Loading task vector for {dataset_name}")
+    return NonLinearTaskVector(pretrained_checkpoint=pretrained_checkpoint, finetuned_checkpoint=finetuned_checkpoint)
+
 
 def resolve_dataset_path(args, dataset_name):
+    """Resolve dataset path."""
     base_path = args.data_location
     dataset_paths = {
         "dtd": os.path.join(base_path, "dtd"),
@@ -21,94 +52,44 @@ def resolve_dataset_path(args, dataset_name):
     }
     return dataset_paths.get(dataset_name.lower(), None)
 
-def save_task_vector(args, dataset_name):
-    """Save the task vector for a dataset."""
-    pretrained_checkpoint = os.path.join(args.checkpoints_path, "pretrained.pt")
-    finetuned_checkpoint = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
-    task_vector_path = os.path.join(args.checkpoints_path, f"{dataset_name}_task_vector.pt")
 
-    if not os.path.exists(pretrained_checkpoint):
-        raise FileNotFoundError(f"Pre-trained checkpoint not found at {pretrained_checkpoint}")
-    if not os.path.exists(finetuned_checkpoint):
-        raise FileNotFoundError(f"Fine-tuned checkpoint not found at {finetuned_checkpoint}")
-
-    if os.path.exists(task_vector_path):
-        print(f"✅ Task vector for {dataset_name} already exists at {task_vector_path}. Skipping...")
-        return
-
-    print(f"🔄 Generating task vector for {dataset_name}...")
-    pretrained_model = torch.load(pretrained_checkpoint)
-    finetuned_model = torch.load(finetuned_checkpoint)
-
-    # Compute the task vector as the difference between fine-tuned and pre-trained weights
-    task_vector = {name: finetuned_model[name] - pretrained_model[name]
-                   for name in pretrained_model if name in finetuned_model}
-
-    torch.save(task_vector, task_vector_path)
-    print(f"✅ Task vector saved at {task_vector_path}")
-
-
-def load_task_vector_model(args, dataset_name):
-    """Load the task vector for a dataset."""
-    task_vector_path = os.path.join(args.checkpoints_path, f"{dataset_name}_task_vector.pt")
-
-    if not os.path.exists(task_vector_path):
-        save_task_vector(args, dataset_name)
-
-    print(f"🔄 Loading task vector for {dataset_name}")
-    return torch.load(task_vector_path)
-
-def compute_train_accuracy_and_fim(model, train_loader, device="cuda"):
-    # Compute train accuracy
+def evaluate_model(model, dataloader):
+    """Evaluate model accuracy."""
     correct, total = 0, 0
-    fim = {}
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            fim[name] = torch.zeros_like(param)
+    model.eval()
+    with torch.no_grad():
+        for batch in dataloader:
+            inputs, labels = batch[0].cuda(), batch[1].cuda()
+            outputs = model(inputs)
+            _, preds = torch.max(outputs, 1)
+            correct += (preds == labels).sum().item()
+            total += labels.size(0)
+    return correct / total
 
-    criterion = torch.nn.CrossEntropyLoss()
-    model.train()
-    total_samples = 0
 
-    for batch in tqdm(train_loader, desc="Processing Train Batch"):
-        inputs, labels = batch[0].to(device), batch[1].to(device)
+def compute_average_normalized_accuracy(val_accuracies, best_accuracies):
+    """Compute normalized accuracy."""
+    return np.mean([va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)])
 
-        model.zero_grad()
-        outputs = model(inputs)
-        _, preds = torch.max(outputs, 1)
-        correct += (preds == labels).sum().item()
-        total += labels.size(0)
 
-        # Compute FIM
-        loss = criterion(outputs, labels)
-        loss.backward(retain_graph=True)
+def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
+    """Evaluate the model for a specific alpha value on the validation set."""
+    print(f"\n🔍 Evaluating alpha = {alpha:.2f}")
 
-        for name, param in model.named_parameters():
-            if param.requires_grad and param.grad is not None:
-                fim[name] += param.grad.pow(2)
+    # ✅ Combine task vectors using the current alpha
+    combined_vector = task_vectors[0] * alpha
+    for vec in task_vectors[1:]:
+        combined_vector += vec * alpha
 
-        total_samples += inputs.size(0)
+    # ✅ Apply the combined task vector to the pre-trained encoder
+    blended_encoder = combined_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
 
-    train_accuracy = correct / total
-    fim_trace = sum(fim[name].sum().item() for name in fim)
-    fim_log_trace = np.log(fim_trace / total_samples)
-    return train_accuracy, fim_log_trace
-
-def main():
-    args = parse_arguments()
-    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
-    args.data_location = "/kaggle/working/datasets"
-    args.batch_size = 32
-
-    datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
-    alpha = 0.3  # Use the best alpha from your eval_task_addition.py results
-
-    results = {}
+    val_accuracies = []
 
     for dataset_name in datasets:
-        print(f"\n--- Processing {dataset_name} ---")
         dataset_path = resolve_dataset_path(args, dataset_name)
 
+        # ✅ Apply grayscale-to-RGB conversion for MNIST
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -117,20 +98,119 @@ def main():
         ])
 
         dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
-        train_loader = dataset.train_loader
+        val_loader = dataset.train_loader
 
-        model = load_task_vector_model(args, dataset_name, alpha)
-        train_acc, fim_log_trace = compute_train_accuracy_and_fim(model, train_loader)
+        head = get_classification_head(args, dataset_name).cuda()
+        model = ImageClassifier(blended_encoder, head).cuda()
 
-        results[dataset_name] = {
-            "train_accuracy": train_acc,
-            "fim_log_trace_train": fim_log_trace
-        }
+        acc = evaluate_model(model, val_loader)
+        val_accuracies.append(acc)
+        print(f"📊 Validation Accuracy for {dataset_name}: {acc:.4f}")
 
-    save_path = "/kaggle/working/scaled_train_results.json"
+    # ✅ Compute and return the average normalized accuracy
+    avg_norm_acc = compute_average_normalized_accuracy(val_accuracies, best_accuracies)
+    print(f"📈 Average Normalized Accuracy at alpha {alpha:.2f}: {avg_norm_acc:.4f}")
+    return avg_norm_acc, val_accuracies
+
+
+def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
+    """Evaluate the model on test datasets using the best alpha and compute the average absolute accuracy."""
+    print(f"\n🧪 Evaluating on Test Datasets with α = {alpha:.2f}")
+
+    # ✅ Combine task vectors for the best alpha
+    combined_vector = task_vectors[0] * alpha
+    for vec in task_vectors[1:]:
+        combined_vector += vec * alpha
+
+    blended_encoder = combined_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
+
+    test_accuracies = []
+
+    for dataset_name in datasets:
+        dataset_path = resolve_dataset_path(args, dataset_name)
+
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+        dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
+
+        test_loader = dataset.test_loader
+
+        head = get_classification_head(args, dataset_name).cuda()
+        model = ImageClassifier(blended_encoder, head).cuda()
+
+        acc = evaluate_model(model, test_loader)
+        test_accuracies.append(acc)
+        print(f"✅ Test Accuracy for {dataset_name}: {acc:.4f}")
+
+    avg_absolute_acc = np.mean(test_accuracies)
+    print(f"\n📊 **Average Absolute Accuracy on Test Sets**: {avg_absolute_acc:.4f}")
+    return avg_absolute_acc
+
+
+def save_alpha_results(args, best_alpha, best_avg_norm_acc, test_acc, val_accuracies):
+    results = {
+        "best_alpha": best_alpha,
+        "best_avg_norm_acc": best_avg_norm_acc,
+        "test_accuracy": test_acc,
+        "validation_accuracies": val_accuracies
+    }
+    save_path = os.path.join(args.results_dir, "alpha_results.json")
     with open(save_path, "w") as f:
         json.dump(results, f, indent=4)
-    print(f"\n✅ Results saved to {save_path}")
+    print(f"✅ Alpha results saved to {save_path}")
+
+
+def main():
+    args = parse_arguments()
+    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
+    args.data_location = "/kaggle/working/datasets"
+    args.results_dir = "/kaggle/working/results"
+    args.save = "/kaggle/working/checkpoints_updated"  # Add this line to set args.save
+    args.batch_size = 32
+
+    datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
+
+    save_pretrained_model(args)
+
+    encoder = ImageEncoder(args).cuda()
+
+    task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
+
+    best_accuracies = [json.load(open(os.path.join(args.results_dir, f"{ds}_results.json")))['validation_accuracy'] for ds in datasets]
+
+    best_alpha, best_avg_norm_acc = 0, 0
+    progress_file = os.path.join(args.results_dir, "progress.json")
+
+    if os.path.exists(progress_file):
+        with open(progress_file, "r") as f:
+            progress = json.load(f)
+            best_alpha = progress.get("best_alpha", 0)
+            best_avg_norm_acc = progress.get("best_avg_norm_acc", 0)
+            print(f"🔄 Resuming from α = {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
+    else:
+        progress = {}
+
+    for alpha in np.arange(0.0, 1.05, 0.05):
+        if alpha <= best_alpha:
+            continue
+
+        avg_norm_acc, val_accuracies = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
+        if avg_norm_acc > best_avg_norm_acc:
+            best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
+            progress["best_alpha"] = best_alpha
+            progress["best_avg_norm_acc"] = best_avg_norm_acc
+
+        with open(progress_file, "w") as f:
+            json.dump(progress, f)
+
+    print(f"🏆 Best Alpha (α★): {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
+
+    test_acc = evaluate_on_test(args, encoder, task_vectors, datasets, best_alpha)
+    save_alpha_results(args, best_alpha, best_avg_norm_acc, test_acc, val_accuracies)
 
 if __name__ == "__main__":
     main()
