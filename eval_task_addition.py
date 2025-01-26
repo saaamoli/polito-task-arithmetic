@@ -21,25 +21,42 @@ def resolve_dataset_path(args, dataset_name):
     }
     return dataset_paths.get(dataset_name.lower(), None)
 
-def load_task_vector_model(args, dataset_name, alpha):
-    pretrained_path = os.path.join(args.checkpoints_path, "pretrained.pt")
+def save_task_vector(args, dataset_name):
+    """Save the task vector for a dataset."""
+    pretrained_checkpoint = os.path.join(args.checkpoints_path, "pretrained.pt")
+    finetuned_checkpoint = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
     task_vector_path = os.path.join(args.checkpoints_path, f"{dataset_name}_task_vector.pt")
 
-    if not os.path.exists(pretrained_path):
-        raise FileNotFoundError(f"Pre-trained model not found at {pretrained_path}")
+    if not os.path.exists(pretrained_checkpoint):
+        raise FileNotFoundError(f"Pre-trained checkpoint not found at {pretrained_checkpoint}")
+    if not os.path.exists(finetuned_checkpoint):
+        raise FileNotFoundError(f"Fine-tuned checkpoint not found at {finetuned_checkpoint}")
+
+    if os.path.exists(task_vector_path):
+        print(f"✅ Task vector for {dataset_name} already exists at {task_vector_path}. Skipping...")
+        return
+
+    print(f"🔄 Generating task vector for {dataset_name}...")
+    pretrained_model = torch.load(pretrained_checkpoint)
+    finetuned_model = torch.load(finetuned_checkpoint)
+
+    # Compute the task vector as the difference between fine-tuned and pre-trained weights
+    task_vector = {name: finetuned_model[name] - pretrained_model[name]
+                   for name in pretrained_model if name in finetuned_model}
+
+    torch.save(task_vector, task_vector_path)
+    print(f"✅ Task vector saved at {task_vector_path}")
+
+
+def load_task_vector(args, dataset_name):
+    """Load the task vector for a dataset."""
+    task_vector_path = os.path.join(args.checkpoints_path, f"{dataset_name}_task_vector.pt")
+
     if not os.path.exists(task_vector_path):
-        raise FileNotFoundError(f"Task vector not found for {dataset_name} at {task_vector_path}")
+        save_task_vector(args, dataset_name)
 
-    task_vector = torch.load(task_vector_path)
-    encoder = task_vector.apply_to(pretrained_path, alpha=alpha).cuda()
-
-    head_path = os.path.join(args.checkpoints_path, f"head_{dataset_name}Val.pt")
-    if not os.path.exists(head_path):
-        raise FileNotFoundError(f"Classification head not found for {dataset_name} at {head_path}")
-
-    head = torch.load(head_path).cuda()
-    model = ImageClassifier(encoder, head).cuda()
-    return model
+    print(f"🔄 Loading task vector for {dataset_name}")
+    return torch.load(task_vector_path)
 
 def compute_train_accuracy_and_fim(model, train_loader, device="cuda"):
     # Compute train accuracy
