@@ -123,7 +123,7 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
 
     # Compute the log-trace of FIM
     fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
-    fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))
+    fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))  # Normalize by total_samples
     return fim_log_trace.item()
 
 
@@ -160,8 +160,9 @@ def evaluate_and_save(args, dataset_name):
         ])
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
-    val_loader = dataset.train_loader
-    test_loader = dataset.test_loader  # Adding test loader
+    train_loader = dataset.train_loader  # Use training set for FIM computation
+    val_loader = dataset.train_loader  # Validation set for accuracy
+    test_loader = dataset.test_loader  # Test set for accuracy
 
     model = load_finetuned_model(args, dataset_name)
 
@@ -171,9 +172,9 @@ def evaluate_and_save(args, dataset_name):
     # Compute test accuracy
     test_acc = evaluate_model(model, test_loader)
 
-    # Compute FIM log-trace
+    # Compute FIM log-trace on the training set
     criterion = torch.nn.CrossEntropyLoss()
-    fim_log_trace = compute_fim_log_trace(model, val_loader, criterion, device=args.device)
+    fim_log_trace = compute_fim_log_trace(model, train_loader, criterion, device=args.device)
 
     results = {
         "dataset": dataset_name,
