@@ -13,7 +13,6 @@ from task_vectors import NonLinearTaskVector
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
 
-
 def save_pretrained_model(args):
     save_path = os.path.join(args.checkpoints_path, "pretrained.pt")
     if os.path.exists(save_path):
@@ -24,7 +23,6 @@ def save_pretrained_model(args):
     encoder.save(save_path)
     print(f"✅ Pre-trained model saved at {save_path}")
     return True  # Indicates model was saved
-
 
 
 def load_task_vector(args, dataset_name):
@@ -114,6 +112,7 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
     print(f"📈 Average Normalized Accuracy at alpha {alpha:.2f}: {avg_norm_acc:.4f}")
     return avg_norm_acc, val_accuracies
 
+
 def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
     """Evaluate the model on test datasets using the best alpha and compute the average absolute accuracy."""
     print(f"\n🧪 Evaluating on Test Datasets with α = {alpha:.2f}")
@@ -130,7 +129,6 @@ def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
     for dataset_name in datasets:
         dataset_path = resolve_dataset_path(args, dataset_name)
 
-        # ✅ Fix: Remove 'Test' suffix
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -139,7 +137,7 @@ def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
         ])
         dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
 
-        test_loader = dataset.test_loader  # Ensure test_loader is defined in your dataset object
+        test_loader = dataset.test_loader
 
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(blended_encoder, head).cuda()
@@ -148,11 +146,22 @@ def evaluate_on_test(args, encoder, task_vectors, datasets, alpha):
         test_accuracies.append(acc)
         print(f"✅ Test Accuracy for {dataset_name}: {acc:.4f}")
 
-    # ✅ Compute and print the average absolute accuracy (Equation 1)
     avg_absolute_acc = np.mean(test_accuracies)
     print(f"\n📊 **Average Absolute Accuracy on Test Sets**: {avg_absolute_acc:.4f}")
     return avg_absolute_acc
 
+
+def save_alpha_results(args, best_alpha, best_avg_norm_acc, test_acc, val_accuracies):
+    results = {
+        "best_alpha": best_alpha,
+        "best_avg_norm_acc": best_avg_norm_acc,
+        "test_accuracy": test_acc,
+        "validation_accuracies": val_accuracies
+    }
+    save_path = os.path.join(args.results_dir, "alpha_results.json")
+    with open(save_path, "w") as f:
+        json.dump(results, f, indent=4)
+    print(f"✅ Alpha results saved to {save_path}")
 
 
 def main():
@@ -164,24 +173,17 @@ def main():
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
-    # ✅ Ensure pretrained model is saved
     save_pretrained_model(args)
 
-    # ✅ Initialize the encoder (Fix)
-    encoder = ImageEncoder(args).cuda()  # 🔥 This line was missing
+    encoder = ImageEncoder(args).cuda()
 
-    # ✅ Load task vectors
     task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
 
-    # ✅ Load best validation accuracies
     best_accuracies = [json.load(open(os.path.join(args.results_dir, f"{ds}_results.json")))['validation_accuracy'] for ds in datasets]
 
-    # 🔎 Search for the best alpha
-    # 🔎 Search for the best alpha
     best_alpha, best_avg_norm_acc = 0, 0
     progress_file = os.path.join(args.results_dir, "progress.json")
-    
-    # Load progress if it exists
+
     if os.path.exists(progress_file):
         with open(progress_file, "r") as f:
             progress = json.load(f)
@@ -190,26 +192,24 @@ def main():
             print(f"🔄 Resuming from α = {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
     else:
         progress = {}
-    
+
     for alpha in np.arange(0.0, 1.05, 0.05):
-        if alpha <= best_alpha:  # Skip already evaluated alphas
+        if alpha <= best_alpha:
             continue
-    
-        avg_norm_acc, _ = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
+
+        avg_norm_acc, val_accuracies = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
         if avg_norm_acc > best_avg_norm_acc:
             best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
             progress["best_alpha"] = best_alpha
             progress["best_avg_norm_acc"] = best_avg_norm_acc
-    
-        # Save progress after each alpha evaluation
+
         with open(progress_file, "w") as f:
             json.dump(progress, f)
-    
+
     print(f"🏆 Best Alpha (α★): {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
 
-   
-    # ✅ Evaluate on test datasets using the best alpha
-    evaluate_on_test(args, encoder, task_vectors, datasets, best_alpha)  # 🔥 Pass the encoder here
+    test_acc = evaluate_on_test(args, encoder, task_vectors, datasets, best_alpha)
+    save_alpha_results(args, best_alpha, best_avg_norm_acc, test_acc, val_accuracies)
 
 if __name__ == "__main__":
     main()
