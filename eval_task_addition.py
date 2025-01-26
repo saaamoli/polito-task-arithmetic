@@ -48,7 +48,7 @@ def save_task_vector(args, dataset_name):
     print(f"✅ Task vector saved at {task_vector_path}")
 
 
-def load_task_vector(args, dataset_name):
+def load_task_vector_model(args, dataset_name):
     """Load the task vector for a dataset."""
     task_vector_path = os.path.join(args.checkpoints_path, f"{dataset_name}_task_vector.pt")
 
