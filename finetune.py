@@ -70,10 +70,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 
     results = {"dataset": dataset_name, "lr": learning_rate, "batch_size": batch_size, "weight_decay": weight_decay, "epochs": []}
 
-    best_val_loss = float('inf')
-    patience_counter = 0
-    early_stop_patience = 5  # Stop if no improvement for 5 consecutive epochs
-
     for epoch in range(num_epochs):
         model.train()
         epoch_loss = 0.0
@@ -108,16 +104,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
         results["epochs"].append({"epoch": epoch+1, "train_loss": epoch_loss / len(train_loader), "val_loss": avg_val_loss, "val_acc": val_accuracy})
 
-        # Early stopping
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
-            patience_counter = 0
-        else:
-            patience_counter += 1
-            if patience_counter >= early_stop_patience:
-                print(f"Early stopping at epoch {epoch+1}")
-                break
-
     save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(save_path)
@@ -130,17 +116,17 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 
 if __name__ == "__main__":
     args = parse_arguments()
-    args.save = "/kaggle/working/checkpoints_updated"
+    args.save = "/kaggle/working/checkpoints_baseline"  # New directory for baseline checkpoints
     args.data_location = "/kaggle/working/datasets"
 
     # Baseline hyperparameters from Table 1
     baseline_hyperparams = {
-        "DTD": {"learning_rate": 1e-5, "batch_size": 32, "weight_decay": 0.01},
-        "EuroSAT": {"learning_rate": 5e-5, "batch_size": 32, "weight_decay": 0.01},
-        "GTSRB": {"learning_rate": 1e-5, "batch_size": 32, "weight_decay": 0.01},
-        "MNIST": {"learning_rate": 1e-5, "batch_size": 32, "weight_decay": 0.01},
-        "RESISC45": {"learning_rate": 5e-5, "batch_size": 32, "weight_decay": 0.01},
-        "SVHN": {"learning_rate": 1e-5, "batch_size": 32, "weight_decay": 0.01},
+        "DTD": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},  # Updated to match baseline
+        "EuroSAT": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
+        "GTSRB": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
+        "MNIST": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
+        "RESISC45": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
+        "SVHN": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
     }
 
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
