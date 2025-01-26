@@ -189,10 +189,10 @@ def main():
     args = parse_arguments()
 
     # Define necessary paths
-    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
-    args.results_dir = "/kaggle/working/results"
+    args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
+    args.results_dir = "/kaggle/working/results_baseline"
     args.data_location = "/kaggle/working/datasets"
-    args.save = "/kaggle/working/checkpoints_updated"
+    args.save = "/kaggle/working/checkpoints_baseline"
     args.batch_size = 32
 
     # List of datasets to evaluate
