@@ -94,11 +94,11 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
 
         # Compute the loss
         loss = criterion(outputs, labels)
-        
+
         # Ensure the loss requires gradient
         if not loss.requires_grad:
             raise ValueError("Loss does not require gradients. Check the computation graph.")
-        
+
         # Compute gradients with respect to model parameters
         loss.backward(retain_graph=True)
 
@@ -115,8 +115,6 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
 
     fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))
     return fim_log_trace.item()
-
-
 
 def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -152,11 +150,15 @@ def evaluate_and_save(args, dataset_name):
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
     val_loader = dataset.train_loader
+    test_loader = dataset.test_loader  # Adding test loader
 
     model = load_finetuned_model(args, dataset_name)
 
     # Compute validation accuracy
     val_acc = evaluate_model(model, val_loader)
+
+    # Compute test accuracy
+    test_acc = evaluate_model(model, test_loader)
 
     # Compute FIM log-trace
     criterion = torch.nn.CrossEntropyLoss()
@@ -165,6 +167,7 @@ def evaluate_and_save(args, dataset_name):
     results = {
         "dataset": dataset_name,
         "validation_accuracy": val_acc,
+        "test_accuracy": test_acc,  # Added test accuracy
         "fim_log_trace": fim_log_trace
     }
 
