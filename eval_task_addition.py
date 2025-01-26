@@ -169,6 +169,7 @@ def main():
     args.checkpoints_path = "/kaggle/working/checkpoints_updated"
     args.data_location = "/kaggle/working/datasets"
     args.results_dir = "/kaggle/working/results"
+    args.save = "/kaggle/working/checkpoints_updated"  # Add this line to set args.save
     args.batch_size = 32
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
