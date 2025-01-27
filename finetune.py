@@ -141,8 +141,6 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", type=int, required=True, help="Batch size for training")
     parser.add_argument("--weight_decay", type=float, required=True, help="Weight decay for optimization")
     parser.add_argument("--log_path", type=str, required=True, help="Path to save results log")
-    parser.add_argument("--data_location", type=str, default="/kaggle/working/datasets", help="Path to datasets")
-    parser.add_argument("--save_path", type=str, default="/kaggle/working/checkpoints", help="Path to save model checkpoints")
     args = parser.parse_args()
 
     fine_tune_on_dataset(
@@ -152,6 +150,4 @@ if __name__ == "__main__":
         args.batch_size,
         args.weight_decay,
         args.log_path,
-        args.data_location,
-        args.save_path,
     )
