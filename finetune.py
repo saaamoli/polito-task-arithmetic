@@ -16,7 +16,7 @@ from heads import get_classification_head
 from torchvision import transforms
 
 def resolve_dataset_path(args, dataset_name):
-    base_path = args.data_location
+    base_path = data_location
     dataset_name_lower = dataset_name.lower()
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
