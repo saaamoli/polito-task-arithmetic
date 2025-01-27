@@ -34,7 +34,6 @@ def resolve_dataset_path(data_location, dataset_name):
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
 
-
 def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path, data_location, save_path):
     print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
 
@@ -45,21 +44,21 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-base_dataset_path = resolve_dataset_path(args.data_location, dataset_name)
+    base_dataset_path = resolve_dataset_path(data_location, dataset_name)
 
-if dataset_name.lower() == "dtd":
+    if dataset_name.lower() == "dtd":
         # Use the correct paths for train and val
         train_dataset = get_dataset(
             f"{dataset_name}",
             preprocess=preprocess,
-            location=base_dataset_path["train"],
+            location=os.path.join(base_dataset_path, "train"),
             batch_size=batch_size,
             num_workers=2
         )
         val_dataset = get_dataset(
             f"{dataset_name}",
             preprocess=preprocess,
-            location=base_dataset_path["val"],
+            location=os.path.join(base_dataset_path, "val"),
             batch_size=batch_size,
             num_workers=2
         )
@@ -121,7 +120,7 @@ if dataset_name.lower() == "dtd":
         avg_val_loss = val_loss / len(val_loader)
         val_accuracy = correct / total
 
-        print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
+        print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss / len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
         results["epochs"].append({"epoch": epoch+1, "train_loss": epoch_loss / len(train_loader), "val_loss": avg_val_loss, "val_acc": val_accuracy})
 
     # Save the model
@@ -134,6 +133,8 @@ if dataset_name.lower() == "dtd":
     with open(log_path, "a") as log_file:
         json.dump(results, log_file)
         log_file.write("\n")
+
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune models with different hyperparameters")
