@@ -15,24 +15,23 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from torchvision import transforms
 
-def resolve_dataset_path(args, dataset_name):
-    base_path = args.data_location
+def resolve_dataset_path(data_location, dataset_name):
     dataset_name_lower = dataset_name.lower()
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")
-    elif dataset_name_lower == "eurosat":
-        return base_path
+        return {
+            "train": os.path.join(data_location, "dtd", "train"),
+            "val": os.path.join(data_location, "dtd", "val"),
+        }
+    elif dataset_name_lower in ["eurosat", "resisc45"]:
+        return data_location
     elif dataset_name_lower == "mnist":
-        return os.path.join(base_path, "MNIST", "raw")
+        return os.path.join(data_location, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
-        return os.path.join(base_path, "gtsrb")
-    elif dataset_name_lower == "resisc45":
-        return base_path
+        return os.path.join(data_location, "gtsrb")
     elif dataset_name_lower == "svhn":
-        return os.path.join(base_path, "svhn")
+        return os.path.join(data_location, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
-
 
 def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path, data_location, save_path):
     print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
@@ -63,7 +62,7 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
         )
     else:
         dataset = get_dataset(
-            f"{dataset_name}",
+            f"{dataset_name}Val",
             preprocess=preprocess,
             location=base_dataset_path,
             batch_size=batch_size,
