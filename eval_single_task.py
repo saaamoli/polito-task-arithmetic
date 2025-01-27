@@ -77,41 +77,35 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             fim[name] = torch.zeros_like(param)
 
     total_samples = 0
-    max_samples = 2000  # Limit samples for FIM computation
-    dataloader_iterator = iter(dataloader)  # Create an iterator for looping through the dataloader
+    max_samples = 2000  # Limit the number of samples for FIM computation
+    dataloader_iterator = iter(dataloader)
 
     print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
     while total_samples < max_samples:
         try:
-            batch = next(dataloader_iterator)  # Get the next batch
+            batch = next(dataloader_iterator)
         except StopIteration:
-            # Restart the iterator if we run out of batches
-            dataloader_iterator = iter(dataloader)
+            dataloader_iterator = iter(dataloader)  # Restart iterator if exhausted
             batch = next(dataloader_iterator)
 
-        # Handle different batch formats
-        if isinstance(batch, dict):  
+        # Handle batch types
+        if isinstance(batch, dict):
             inputs, labels = batch['images'].to(device), batch['labels'].to(device)
-        elif isinstance(batch, (list, tuple)):  
+        elif isinstance(batch, (list, tuple)):
             inputs, labels = batch[0].to(device), batch[1].to(device)
         else:
             raise TypeError(f"Unexpected batch type: {type(batch)}")
 
-        # Reset gradients
         model.zero_grad()
 
-        # Forward pass
         outputs = model(inputs)
-
-        # Compute loss
         loss = criterion(outputs, labels)
+
         if not loss.requires_grad:
             raise ValueError("Loss does not require gradients. Check the computation graph.")
 
-        # Backward pass
         loss.backward(retain_graph=True)
 
-        # Accumulate FIM values
         for name, param in model.named_parameters():
             if param.requires_grad and param.grad is not None:
                 fim[name] += param.grad.pow(2)
@@ -121,14 +115,14 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             print(f"Processed {total_samples} samples for FIM computation.")
             break
 
-    # Compute the log-trace of FIM
     fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
+    print(f"Raw FIM Trace Sum: {fim_trace}")
 
-    # Avoid taking the log of zero or negative values
-    normalized_trace = max(fim_trace / total_samples, 1e-10)  # Clamp to a minimum value
+    # Avoid taking log of zero or negative values
+    normalized_trace = max(fim_trace / total_samples, 1e-6)  # Clamp to minimum threshold
     fim_log_trace = torch.log(torch.tensor(normalized_trace))
-    
-    print(f"Computed FIM Trace: {fim_trace}, Log Trace: {fim_log_trace.item()}")
+
+    print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
     return fim_log_trace.item()
 
 
