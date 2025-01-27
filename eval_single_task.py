@@ -77,7 +77,8 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             fim[name] = torch.zeros_like(param)
 
     total_samples = 0
-    max_samples = 2000  # Limit the number of samples for FIM computation
+    max_samples = 5000  # Increased sample size for better approximation
+    scaling_factor = 1e3  # Gradient scaling to stabilize small values
     dataloader_iterator = iter(dataloader)
 
     print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
@@ -108,7 +109,7 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
 
         for name, param in model.named_parameters():
             if param.requires_grad and param.grad is not None:
-                fim[name] += param.grad.pow(2)
+                fim[name] += scaling_factor * param.grad.pow(2)  # Scale gradients to stabilize FIM computation
 
         total_samples += inputs.size(0)
         if total_samples >= max_samples:
@@ -118,15 +119,12 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
     fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
     print(f"Raw FIM Trace Sum: {fim_trace}")
 
-    # Normalize and scale trace
+    # Normalize and safeguard trace computation
     normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)  # Avoid division by zero
     fim_log_trace = torch.log(torch.tensor(normalized_trace))
 
     print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
     return fim_log_trace.item()
-
-
-
 
 def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -176,7 +174,6 @@ def evaluate_and_save(args, dataset_name):
     }
 
     save_results(results, save_path)
-
 
 def main():
     args = parse_arguments()
