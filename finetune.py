@@ -44,7 +44,7 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    base_dataset_path = resolve_dataset_path(data_location, dataset_name)
+base_dataset_path = resolve_dataset_path(args.data_location, dataset_name)
 
     if dataset_name.lower() == "dtd":
         # Use the correct paths for train and val
