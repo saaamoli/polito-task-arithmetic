@@ -46,18 +46,17 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
     ])
 
     base_dataset_path = resolve_dataset_path(data_location, dataset_name)
-    
-    # Handling DTD-specific train/validation split paths
-    if isinstance(base_dataset_path, dict):
+
+    if dataset_name.lower() == "dtd":
         train_dataset = get_dataset(
-            f"{dataset_name}Train",
+            f"{dataset_name}",
             preprocess=preprocess,
             location=base_dataset_path["train"],
             batch_size=batch_size,
             num_workers=2
         )
         val_dataset = get_dataset(
-            f"{dataset_name}Val",
+            f"{dataset_name}",
             preprocess=preprocess,
             location=base_dataset_path["val"],
             batch_size=batch_size,
@@ -65,7 +64,7 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
         )
     else:
         dataset = get_dataset(
-            f"{dataset_name}Val",
+            f"{dataset_name}",
             preprocess=preprocess,
             location=base_dataset_path,
             batch_size=batch_size,
