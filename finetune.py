@@ -47,7 +47,7 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
 
 base_dataset_path = resolve_dataset_path(args.data_location, dataset_name)
 
-    if dataset_name.lower() == "dtd":
+if dataset_name.lower() == "dtd":
         # Use the correct paths for train and val
         train_dataset = get_dataset(
             f"{dataset_name}",
