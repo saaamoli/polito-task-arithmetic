@@ -15,21 +15,21 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from torchvision import transforms
 
-def resolve_dataset_path(data_location, dataset_name):
+def resolve_dataset_path(args, dataset_name):
+    base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
     if dataset_name_lower == "dtd":
-        return {
-            "train": os.path.join(data_location, "dtd", "train"),
-            "val": os.path.join(data_location, "dtd", "val"),
-        }
-    elif dataset_name_lower in ["eurosat", "resisc45"]:
-        return data_location
+        return os.path.join(base_path, "dtd")
+    elif dataset_name_lower == "eurosat":
+        return base_path
     elif dataset_name_lower == "mnist":
-        return os.path.join(data_location, "MNIST", "raw")
+        return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
-        return os.path.join(data_location, "gtsrb")
+        return os.path.join(base_path, "gtsrb")
+    elif dataset_name_lower == "resisc45":
+        return base_path
     elif dataset_name_lower == "svhn":
-        return os.path.join(data_location, "svhn")
+        return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
