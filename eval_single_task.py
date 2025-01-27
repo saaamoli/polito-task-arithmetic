@@ -118,12 +118,13 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
     fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
     print(f"Raw FIM Trace Sum: {fim_trace}")
 
-    # Avoid taking log of zero or negative values
-    normalized_trace = max(fim_trace / total_samples, 1e-6)  # Clamp to minimum threshold
+    # Normalize and scale trace
+    normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)  # Avoid division by zero
     fim_log_trace = torch.log(torch.tensor(normalized_trace))
 
     print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
     return fim_log_trace.item()
+
 
 
 
