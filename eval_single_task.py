@@ -77,7 +77,7 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             fim[name] = torch.zeros_like(param)
 
     total_samples = 0
-    max_samples = 2000  # Desired number of samples for FIM computation
+    max_samples = 2000  # Limit samples for FIM computation
     dataloader_iterator = iter(dataloader)  # Create an iterator for looping through the dataloader
 
     print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
@@ -123,8 +123,14 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
 
     # Compute the log-trace of FIM
     fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
-    fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))  # Normalize by total_samples
+
+    # Avoid taking the log of zero or negative values
+    normalized_trace = max(fim_trace / total_samples, 1e-10)  # Clamp to a minimum value
+    fim_log_trace = torch.log(torch.tensor(normalized_trace))
+    
+    print(f"Computed FIM Trace: {fim_trace}, Log Trace: {fim_log_trace.item()}")
     return fim_log_trace.item()
+
 
 
 def save_results(results, save_path):
@@ -142,27 +148,18 @@ def evaluate_and_save(args, dataset_name):
     dataset_path = resolve_dataset_path(args, dataset_name)
     args.data_location = dataset_path
 
-    # Apply Grayscale to RGB conversion for MNIST
-    if dataset_name.lower() == "mnist":
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.Grayscale(num_output_channels=3),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-        ])
-    else:
-        preprocess = transforms.Compose([
-            transforms.Resize((224, 224)),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                 std=[0.229, 0.224, 0.225])
-        ])
+    preprocess = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406],
+                             std=[0.229, 0.224, 0.225])
+    ])
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
-    train_loader = dataset.train_loader  # Use training set for FIM computation
-    val_loader = dataset.train_loader  # Validation set for accuracy
-    test_loader = dataset.test_loader  # Test set for accuracy
+    train_loader = dataset.train_loader  # Training set for FIM computation
+    val_loader = dataset.train_loader  # Validation set
+    test_loader = dataset.test_loader  # Test set
 
     model = load_finetuned_model(args, dataset_name)
 
@@ -179,11 +176,12 @@ def evaluate_and_save(args, dataset_name):
     results = {
         "dataset": dataset_name,
         "validation_accuracy": val_acc,
-        "test_accuracy": test_acc,  # Added test accuracy
+        "test_accuracy": test_acc,
         "fim_log_trace": fim_log_trace
     }
 
     save_results(results, save_path)
+
 
 def main():
     args = parse_arguments()
