@@ -18,7 +18,10 @@ from torchvision import transforms
 def resolve_dataset_path(data_location, dataset_name):
     dataset_name_lower = dataset_name.lower()
     if dataset_name_lower == "dtd":
-        return os.path.join(data_location, "dtd")
+        return {
+            "train": os.path.join(data_location, "dtd", "train"),
+            "val": os.path.join(data_location, "dtd", "val"),
+        }
     elif dataset_name_lower == "eurosat":
         return data_location
     elif dataset_name_lower == "mnist":
@@ -43,9 +46,36 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
     ])
 
     base_dataset_path = resolve_dataset_path(data_location, dataset_name)
-    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=base_dataset_path, batch_size=batch_size, num_workers=2)
-    train_loader = get_dataloader(dataset, is_train=True)
-    val_loader = get_dataloader(dataset, is_train=False)
+    
+    # Handling DTD-specific train/validation split paths
+    if isinstance(base_dataset_path, dict):
+        train_dataset = get_dataset(
+            f"{dataset_name}Train",
+            preprocess=preprocess,
+            location=base_dataset_path["train"],
+            batch_size=batch_size,
+            num_workers=2
+        )
+        val_dataset = get_dataset(
+            f"{dataset_name}Val",
+            preprocess=preprocess,
+            location=base_dataset_path["val"],
+            batch_size=batch_size,
+            num_workers=2
+        )
+    else:
+        dataset = get_dataset(
+            f"{dataset_name}Val",
+            preprocess=preprocess,
+            location=base_dataset_path,
+            batch_size=batch_size,
+            num_workers=2
+        )
+        train_dataset = dataset
+        val_dataset = dataset
+
+    train_loader = get_dataloader(train_dataset, is_train=True)
+    val_loader = get_dataloader(val_dataset, is_train=False)
 
     encoder = ImageEncoder().cuda()
     head = get_classification_head(dataset_name).cuda()
