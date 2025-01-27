@@ -15,6 +15,7 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from torchvision import transforms
 
+
 def resolve_dataset_path(data_location, dataset_name):
     base_path = data_location
     dataset_name_lower = dataset_name.lower()
@@ -33,7 +34,8 @@ def resolve_dataset_path(data_location, dataset_name):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path, data_location, save_path):
+
+def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path, data_location, save_path, model):
     print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
 
     preprocess = transforms.Compose([
@@ -45,35 +47,29 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
 
     base_dataset_path = resolve_dataset_path(data_location, dataset_name)
 
-    if dataset_name.lower() == "dtd":
-        train_dataset = get_dataset(
-            "DTDTrain",
+    train_loader = get_dataloader(
+        get_dataset(
+            f"{dataset_name}",
             preprocess=preprocess,
             location=os.path.join(base_dataset_path, "train"),
             batch_size=batch_size,
-            num_workers=2
-        )
-        val_dataset = get_dataset(
-            "DTDVal",
+            num_workers=2,
+        ),
+        is_train=True,
+    )
+
+    val_loader = get_dataloader(
+        get_dataset(
+            f"{dataset_name}",
             preprocess=preprocess,
             location=os.path.join(base_dataset_path, "val"),
             batch_size=batch_size,
-            num_workers=2
-        )
-    else:
-        train_dataset = get_dataset(
-            f"{dataset_name}Val",
-            preprocess=preprocess,
-            location=base_dataset_path,
-            batch_size=batch_size,
-            num_workers=2
-        )
-        val_dataset = train_dataset
+            num_workers=2,
+        ),
+        is_train=False,
+    )
 
-    train_loader = get_dataloader(train_dataset, is_train=True)
-    val_loader = get_dataloader(val_dataset, is_train=False)
-
-    encoder = ImageEncoder().cuda()
+    encoder = ImageEncoder({"model": model}).cuda()  # Pass model explicitly
     head = get_classification_head(dataset_name).cuda()
     model = ImageClassifier(encoder, head).cuda()
 
@@ -131,6 +127,7 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
         json.dump(results, log_file)
         log_file.write("\n")
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Fine-tune models with different hyperparameters")
     parser.add_argument("--dataset", type=str, required=True, help="Dataset name (e.g., DTD, EuroSAT, GTSRB, MNIST, RESISC45, SVHN)")
@@ -141,6 +138,7 @@ if __name__ == "__main__":
     parser.add_argument("--log_path", type=str, required=True, help="Path to save results log")
     parser.add_argument("--data_location", type=str, default="/kaggle/working/datasets", help="Path to datasets")
     parser.add_argument("--save_path", type=str, default="/kaggle/working/checkpoints", help="Path to save model checkpoints")
+    parser.add_argument("--model", type=str, default="ViT-B-32", help="Model to use (e.g., ViT-B-32, ResNet-50)")
     args = parser.parse_args()
 
     fine_tune_on_dataset(
@@ -152,4 +150,5 @@ if __name__ == "__main__":
         args.log_path,
         args.data_location,
         args.save_path,
+        args.model,
     )
