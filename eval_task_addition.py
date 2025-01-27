@@ -68,12 +68,20 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             fim[name] = torch.zeros_like(param)
 
     total_samples = 0
-    for batch in tqdm(dataloader, desc="Computing FIM"):
-        if total_samples >= 2000:
-            break
+    max_samples = 2000
+    dataloader_iterator = iter(dataloader)
+
+    print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
+    while total_samples < max_samples:
+        try:
+            batch = next(dataloader_iterator)
+        except StopIteration:
+            dataloader_iterator = iter(dataloader)
+            batch = next(dataloader_iterator)
 
         inputs, labels = batch[0].to(device), batch[1].to(device)
         model.zero_grad()
+
         outputs = model(inputs)
         loss = criterion(outputs, labels)
         loss.backward(retain_graph=True)
@@ -83,9 +91,16 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
                 fim[name] += param.grad.pow(2)
 
         total_samples += inputs.size(0)
+        if total_samples >= max_samples:
+            print(f"Processed {total_samples} samples for FIM computation.")
+            break
 
     fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
-    fim_log_trace = torch.log(torch.tensor(fim_trace / total_samples))
+    normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)
+    fim_log_trace = torch.log(torch.tensor(normalized_trace))
+
+    print(f"Raw FIM Trace Sum: {fim_trace}")
+    print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
     return fim_log_trace.item()
 
 def evaluate_train_metrics(args, encoder, task_vectors, datasets, alpha):
@@ -130,10 +145,10 @@ def evaluate_train_metrics(args, encoder, task_vectors, datasets, alpha):
 
 def main():
     args = parse_arguments()
-    args.checkpoints_path = "/kaggle/working/checkpoints_updated"
+    args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
     args.data_location = "/kaggle/working/datasets"
-    args.results_dir = "/kaggle/working/results"
-    args.save = "/kaggle/working/checkpoints_updated"
+    args.results_dir = "/kaggle/working/results_baseline"
+    args.save = "/kaggle/working/checkpoints_baseline"
     args.batch_size = 32
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
