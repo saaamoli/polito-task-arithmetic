@@ -17,8 +17,11 @@ def parse_arguments():
     parser = ArgumentParser(description="Fine-tune image classifier on various datasets.")
     parser.add_argument("--data-location", type=str, required=True, help="Path to the dataset location.")
     parser.add_argument("--save", type=str, required=True, help="Path to save fine-tuned checkpoints.")
-    parser.add_argument("--model", type=str, default="resnet18", help="Model architecture to use.")
+    parser.add_argument("--learning-rate", type=float, required=True, help="Learning rate for fine-tuning.")
+    parser.add_argument("--batch-size", type=int, required=True, help="Batch size for training.")
+    parser.add_argument("--weight-decay", type=float, required=True, help="Weight decay for optimizer.")
     return parser.parse_args()
+
 
 def resolve_dataset_path(data_location, dataset_name):
     dataset_name_lower = dataset_name.lower()
