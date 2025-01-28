@@ -145,35 +145,43 @@ def evaluate_and_save(args, dataset_name):
         transforms.Resize((224, 224)),
         transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                             std=[0.229, 0.224, 0.225])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
-    train_loader = dataset.train_loader  # Training set for FIM computation
+    train_loader = dataset.train_loader  # Training set for metrics computation
     val_loader = dataset.train_loader  # Validation set
     test_loader = dataset.test_loader  # Test set
 
     model = load_finetuned_model(args, dataset_name)
 
+    # Compute train accuracy
+    train_acc = evaluate_model(model, train_loader)
+    print(f"✅ Train Accuracy for {dataset_name}: {train_acc:.4f}")
+
     # Compute validation accuracy
     val_acc = evaluate_model(model, val_loader)
+    print(f"✅ Validation Accuracy for {dataset_name}: {val_acc:.4f}")
 
     # Compute test accuracy
     test_acc = evaluate_model(model, test_loader)
+    print(f"✅ Test Accuracy for {dataset_name}: {test_acc:.4f}")
 
     # Compute FIM log-trace on the training set
     criterion = torch.nn.CrossEntropyLoss()
     fim_log_trace = compute_fim_log_trace(model, train_loader, criterion, device=args.device)
+    print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
 
+    # Save results
     results = {
         "dataset": dataset_name,
+        "train_accuracy": train_acc,
         "validation_accuracy": val_acc,
         "test_accuracy": test_acc,
         "fim_log_trace": fim_log_trace
     }
-
     save_results(results, save_path)
+
 
 def main():
     args = parse_arguments()
