@@ -201,9 +201,6 @@ def main():
     args.results_dir = "/kaggle/working/results_baseline"
     args.data_location = "/kaggle/working/datasets"
     args.save = "/kaggle/working/checkpoints_baseline"
-    # Set batch size dynamically for each dataset
-    args.batch_size = baseline_hyperparams[dataset_name]["batch_size"]
-
 
     # List of datasets to evaluate
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
@@ -211,8 +208,11 @@ def main():
     # Evaluate and save results for each dataset
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
+        # Set batch size dynamically for the current dataset
         args.batch_size = baseline_hyperparams[dataset_name]["batch_size"]
+        print(f"Using batch size {args.batch_size} for {dataset_name}")
         evaluate_and_save(args, dataset_name)
+
 
 if __name__ == "__main__":
     main()
