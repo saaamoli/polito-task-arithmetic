@@ -51,7 +51,7 @@ def fine_tune_on_dataset(dataset_name, num_epochs, learning_rate, batch_size, we
         train_dataset = get_dataset(
             f"{dataset_name}",
             preprocess=preprocess,
-            location=os.path.join(data_location, "dtd", "train"),
+            location=os.path.join(data_location, "dtd"),
             batch_size=batch_size,
             num_workers=2
         )
