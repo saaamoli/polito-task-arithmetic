@@ -40,8 +40,8 @@ def resolve_dataset_path(data_location, dataset_name):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
-    print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
+def fine_tune_on_dataset(args, dataset_name, num_epochs, log_path):
+    print(f"\n==== Fine-tuning on {dataset_name} with LR={args.learning_rate}, Batch Size={args.batch_size}, WD={args.weight_decay} ====\n")
 
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
@@ -56,15 +56,21 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     ])
 
     dataset_path = resolve_dataset_path(args.data_location, dataset_name)
-    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=dataset_path, batch_size=batch_size, num_workers=2)
+    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=dataset_path, batch_size=args.batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
     val_loader = get_dataloader(dataset, is_train=False, args=args)
 
+    # Handle dataset class names
+    if hasattr(dataset, "classnames"):
+        num_classes = len(dataset.classnames)
+    elif hasattr(dataset, "classes"):
+        num_classes = len(dataset.classes)
+    else:
+        raise AttributeError(f"Dataset {dataset_name} does not have 'classnames' or 'classes' attributes.")
+
     # Ensure required attributes in args
-    if not hasattr(args, "image_size"):
-        args.image_size = 224  # Default image size
-    if not hasattr(args, "num_classes"):
-        args.num_classes = len(dataset.classes)  # Infer number of classes from dataset
+    args.num_classes = num_classes
+    args.image_size = 224  # Default image size
 
     encoder = ImageEncoder(args).cuda()
     head = get_classification_head(args, dataset_name).cuda()
@@ -74,10 +80,10 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     for param in model.classification_head.parameters():
         param.requires_grad = False
 
-    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
 
-    results = {"dataset": dataset_name, "lr": learning_rate, "batch_size": batch_size, "weight_decay": weight_decay, "epochs": []}
+    results = {"dataset": dataset_name, "lr": args.learning_rate, "batch_size": args.batch_size, "weight_decay": args.weight_decay, "epochs": []}
 
     for epoch in range(num_epochs):
         model.train()
@@ -121,6 +127,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     # Save results to JSON
     with open(log_path, "a") as log_file:
         log_file.write(json.dumps(results) + "\n")
+
 
 if __name__ == "__main__":
     args = parse_arguments()
