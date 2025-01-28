@@ -131,32 +131,23 @@ def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies
 
         acc = evaluate_model(model, val_loader)
         val_accuracies.append(acc)
+        print(f"📊 Validation Accuracy for {dataset_name}: {acc:.4f}")
 
     avg_norm_acc = np.mean([va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)])
+    print(f"📈 Average Normalized Accuracy at alpha {alpha:.2f}: {avg_norm_acc:.4f}")
     return avg_norm_acc
 
-def find_best_alpha(args, encoder, task_vectors, datasets, best_accuracies):
-    best_alpha, best_avg_norm_acc = 0, 0
-    progress_file = os.path.join(args.results_dir, "progress.json")
+def evaluate_and_save(args, encoder, task_vectors, datasets, best_alpha):
+    print(f"\n🧪 Evaluating with α⋆ = {best_alpha:.2f}")
 
-    for alpha in np.arange(0.0, 1.05, 0.05):
-        avg_norm_acc = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
-        if avg_norm_acc > best_avg_norm_acc:
-            best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
-
-    with open(progress_file, "w") as f:
-        json.dump({"best_alpha": best_alpha, "best_avg_norm_acc": best_avg_norm_acc}, f)
-
-    return best_alpha
-
-def evaluate_scaled_model(args, encoder, task_vectors, datasets, alpha):
-    combined_vector = task_vectors[0] * alpha
+    combined_vector = task_vectors[0] * best_alpha
     for vec in task_vectors[1:]:
-        combined_vector += vec * alpha
+        combined_vector += vec * best_alpha
 
     blended_encoder = combined_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
 
     test_accuracies, train_accuracies, fim_log_traces = [], [], []
+
     for dataset_name in datasets:
         dataset_path = resolve_dataset_path(args, dataset_name)
 
@@ -174,27 +165,35 @@ def evaluate_scaled_model(args, encoder, task_vectors, datasets, alpha):
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(blended_encoder, head).cuda()
 
-        test_acc = evaluate_model(model, test_loader)
         train_acc = evaluate_model(model, train_loader)
+        test_acc = evaluate_model(model, test_loader)
+        test_accuracies.append(test_acc)
+        train_accuracies.append(train_acc)
 
         criterion = torch.nn.CrossEntropyLoss()
         fim_log_trace = compute_fim_log_trace(model, train_loader, criterion, device=args.device)
-
-        test_accuracies.append(test_acc)
-        train_accuracies.append(train_acc)
         fim_log_traces.append(fim_log_trace)
 
-    avg_absolute_acc = np.mean(test_accuracies)
-    avg_normalized_acc = np.mean([test_acc / best_acc if best_acc != 0 else 0 for test_acc, best_acc in zip(test_accuracies, best_accuracies)])
+        print(f"✅ Train Accuracy for {dataset_name}: {train_acc:.4f}")
+        print(f"✅ Test Accuracy for {dataset_name}: {test_acc:.4f}")
+        print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
 
-    return {
-        "alpha": alpha,
-        "test_accuracies": test_accuracies,
+    avg_absolute_acc = np.mean(test_accuracies)
+    avg_normalized_acc = np.mean([test_acc / single_acc for test_acc, single_acc in zip(test_accuracies, best_accuracies)])
+
+    results = {
         "train_accuracies": train_accuracies,
+        "test_accuracies": test_accuracies,
         "fim_log_traces": fim_log_traces,
         "avg_absolute_acc": avg_absolute_acc,
-        "avg_normalized_acc": avg_normalized_acc
+        "avg_normalized_acc": avg_normalized_acc,
+        "alpha": best_alpha
     }
+
+    save_path = os.path.join(args.results_dir, "task_addition_metrics.json")
+    with open(save_path, "w") as f:
+        json.dump(results, f, indent=4)
+    print(f"✅ Task addition metrics saved to {save_path}")
 
 def main():
     args = parse_arguments()
@@ -204,4 +203,65 @@ def main():
     args.save = "/kaggle/working/checkpoints_baseline"
     args.batch_size = 32
 
-    datasets
+    datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
+
+    # Step 1: Ensure the pre-trained model is saved
+    save_pretrained_model(args)
+
+    # Step 2: Load encoder
+    encoder = ImageEncoder(args).cuda()
+
+    # Step 3: Load task vectors
+    task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
+
+    # Step 4: Load best alpha from progress.json or evaluate it
+    progress_file = os.path.join(args.results_dir, "progress.json")
+    if os.path.exists(progress_file):
+        with open(progress_file, "r") as f:
+            progress = json.load(f)
+            best_alpha = progress.get("best_alpha", 0)
+            print(f"🔄 Resuming from α = {best_alpha:.2f}")
+    else:
+        best_alpha, best_avg_norm_acc = search_best_alpha(args, encoder, task_vectors, datasets)
+        # Save progress
+        progress = {"best_alpha": best_alpha, "best_avg_norm_acc": best_avg_norm_acc}
+        with open(progress_file, "w") as f:
+            json.dump(progress, f)
+        print(f"🏆 Best Alpha (α⋆): {best_alpha:.2f} with Avg Normalized Accuracy: {best_avg_norm_acc:.4f}")
+
+    # Step 5: Evaluate metrics for α⋆
+    print("\n--- Evaluating Metrics for α⋆ ---")
+    test_accuracies, train_accuracies, fim_log_traces = evaluate_metrics_after_scaling(
+        args, encoder, task_vectors, datasets, best_alpha
+    )
+
+    # Step 6: Compute normalized accuracies
+    best_test_accuracies = [
+        json.load(open(os.path.join(args.results_dir, f"{ds}_results.json")))["test_accuracy"]
+        for ds in datasets
+    ]
+    best_train_accuracies = [
+        json.load(open(os.path.join(args.results_dir, f"{ds}_results.json")))["train_accuracy"]
+        for ds in datasets
+    ]
+    normalized_test_accuracies = compute_normalized_accuracies(test_accuracies, best_test_accuracies)
+    normalized_train_accuracies = compute_normalized_accuracies(train_accuracies, best_train_accuracies)
+
+    # Step 7: Save results
+    results = {
+        "alpha": best_alpha,
+        "test_accuracies": test_accuracies,
+        "train_accuracies": train_accuracies,
+        "fim_log_traces": fim_log_traces,
+        "normalized_test_accuracies": normalized_test_accuracies,
+        "normalized_train_accuracies": normalized_train_accuracies,
+        "avg_absolute_test_accuracy": np.mean(test_accuracies),
+        "avg_absolute_train_accuracy": np.mean(train_accuracies),
+        "avg_normalized_test_accuracy": np.mean(normalized_test_accuracies),
+        "avg_normalized_train_accuracy": np.mean(normalized_train_accuracies),
+    }
+
+    save_path = os.path.join(args.results_dir, "final_metrics.json")
+    with open(save_path, "w") as f:
+        json.dump(results, f, indent=4)
+    print(f"✅ Final metrics saved to {save_path}")
