@@ -22,7 +22,6 @@ def parse_arguments():
     parser.add_argument("--weight-decay", type=float, required=True, help="Weight decay for optimizer.")
     return parser.parse_args()
 
-
 def resolve_dataset_path(data_location, dataset_name):
     dataset_name_lower = dataset_name.lower()
     if dataset_name_lower == "dtd":
@@ -128,11 +127,8 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, log_path):
     with open(log_path, "a") as log_file:
         log_file.write(json.dumps(results) + "\n")
 
-
 if __name__ == "__main__":
     args = parse_arguments()
-    args.save = "/kaggle/working/checkpoints_baseline"  # New directory for baseline checkpoints
-    args.data_location = "/kaggle/working/datasets"
 
     # Define datasets and epochs
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
@@ -143,8 +139,5 @@ if __name__ == "__main__":
             args,
             dataset_name,
             num_epochs,
-            learning_rate=1e-4,
-            batch_size=32,
-            weight_decay=0.0,
-            log_path=log_path,
+            log_path,
         )
