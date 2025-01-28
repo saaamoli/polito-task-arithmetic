@@ -19,10 +19,10 @@ def parse_arguments():
     parser = ArgumentParser(description="Fine-tune image classifier on various datasets.")
     parser.add_argument("--data-location", type=str, required=True, help="Path to the dataset location.")
     parser.add_argument("--save", type=str, required=True, help="Path to save the fine-tuned checkpoints.")
-    parser.add_argument("--learning-rate", type=float, required=True, help="Learning rate for fine-tuning.")
-    parser.add_argument("--batch-size", type=int, required=True, help="Batch size for training.")
-    parser.add_argument("--weight-decay", type=float, required=True, help="Weight decay for optimizer.")
-    parser.add_argument("--datasets-epochs", type=str, required=True, help="JSON string mapping datasets to epochs.")
+    parser.add_argument("--learning-rate", type=float, default=1e-4, help="Learning rate for fine-tuning.")
+    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for training.")
+    parser.add_argument("--weight-decay", type=float, default=0.0, help="Weight decay for optimizer.")
+    parser.add_argument("--model", type=str, default="resnet18", help="Model architecture to use.")
     return parser.parse_args()
 
 
@@ -44,8 +44,8 @@ def resolve_dataset_path(data_location, dataset_name):
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
 
-def fine_tune_on_dataset(args, dataset_name, num_epochs):
-    print(f"\n==== Fine-tuning on {dataset_name} with LR={args.learning_rate}, Batch Size={args.batch_size}, WD={args.weight_decay}, Epochs={num_epochs} ====\n")
+def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
+    print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
 
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
@@ -60,7 +60,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     ])
 
     base_dataset_path = resolve_dataset_path(args.data_location, dataset_name)
-    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=base_dataset_path, batch_size=args.batch_size, num_workers=2)
+    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=base_dataset_path, batch_size=batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
     val_loader = get_dataloader(dataset, is_train=False, args=args)
 
@@ -72,10 +72,10 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     for param in model.classification_head.parameters():
         param.requires_grad = False
 
-    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
 
-    results = {"dataset": dataset_name, "lr": args.learning_rate, "batch_size": args.batch_size, "weight_decay": args.weight_decay, "epochs": []}
+    results = {"dataset": dataset_name, "lr": learning_rate, "batch_size": batch_size, "weight_decay": weight_decay, "epochs": []}
 
     for epoch in range(num_epochs):
         model.train()
@@ -117,7 +117,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"✅ Fine-tuned model saved to {save_path}")
 
     # Save results to JSON
-    log_path = os.path.join(args.save, "results.json")
     with open(log_path, "a") as log_file:
         log_file.write(json.dumps(results) + "\n")
 
@@ -125,8 +124,18 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
 if __name__ == "__main__":
     args = parse_arguments()
 
-    # Parse datasets and epochs mapping from the JSON string
-    datasets_epochs = json.loads(args.datasets_epochs)
+    # Define dataset epochs mapping
+    dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
+    log_path = os.path.join(args.save, "baseline_results.json")
 
-    for dataset_name, num_epochs in datasets_epochs.items():
-        fine_tune_on_dataset(args, dataset_name, num_epochs)
+    # Iterate over each dataset
+    for dataset_name, num_epochs in dataset_epochs.items():
+        fine_tune_on_dataset(
+            args,
+            dataset_name,
+            num_epochs,
+            args.learning_rate,
+            args.batch_size,
+            args.weight_decay,
+            log_path,
+        )
