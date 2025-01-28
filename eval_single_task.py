@@ -10,6 +10,16 @@ from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
 
+
+# Load hyperparameters from hyperparams.json
+hyperparams_path = '/kaggle/working/polito-task-arithmetic/hyperparams.json'
+
+if not os.path.exists(hyperparams_path):
+    raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
+
+with open(hyperparams_path, "r") as f:
+    baseline_hyperparams = json.load(f)
+
 def load_finetuned_model(args, dataset_name):
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
 
@@ -191,7 +201,9 @@ def main():
     args.results_dir = "/kaggle/working/results_baseline"
     args.data_location = "/kaggle/working/datasets"
     args.save = "/kaggle/working/checkpoints_baseline"
-    args.batch_size = 32
+    # Set batch size dynamically for each dataset
+    args.batch_size = baseline_hyperparams[dataset_name]["batch_size"]
+
 
     # List of datasets to evaluate
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
@@ -199,6 +211,7 @@ def main():
     # Evaluate and save results for each dataset
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
+        args.batch_size = baseline_hyperparams[dataset_name]["batch_size"]
         evaluate_and_save(args, dataset_name)
 
 if __name__ == "__main__":
