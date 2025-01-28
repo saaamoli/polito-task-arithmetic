@@ -103,8 +103,8 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
     print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
     return fim_log_trace.item()
 
-def evaluate_train_metrics(args, encoder, task_vectors, datasets, alpha):
-    print(f"\n🧪 Evaluating Train Metrics with α = {alpha:.2f}")
+def evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies):
+    print(f"\n🔍 Evaluating alpha = {alpha:.2f}")
 
     combined_vector = task_vectors[0] * alpha
     for vec in task_vectors[1:]:
@@ -112,9 +112,51 @@ def evaluate_train_metrics(args, encoder, task_vectors, datasets, alpha):
 
     blended_encoder = combined_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
 
-    train_accuracies = []
-    fim_log_traces = []
+    val_accuracies = []
+    for dataset_name in datasets:
+        dataset_path = resolve_dataset_path(args, dataset_name)
 
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+
+        dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
+        val_loader = dataset.train_loader
+
+        head = get_classification_head(args, dataset_name).cuda()
+        model = ImageClassifier(blended_encoder, head).cuda()
+
+        acc = evaluate_model(model, val_loader)
+        val_accuracies.append(acc)
+
+    avg_norm_acc = np.mean([va / ba if ba != 0 else 0 for va, ba in zip(val_accuracies, best_accuracies)])
+    return avg_norm_acc
+
+def find_best_alpha(args, encoder, task_vectors, datasets, best_accuracies):
+    best_alpha, best_avg_norm_acc = 0, 0
+    progress_file = os.path.join(args.results_dir, "progress.json")
+
+    for alpha in np.arange(0.0, 1.05, 0.05):
+        avg_norm_acc = evaluate_alpha(args, encoder, task_vectors, datasets, alpha, best_accuracies)
+        if avg_norm_acc > best_avg_norm_acc:
+            best_avg_norm_acc, best_alpha = avg_norm_acc, alpha
+
+    with open(progress_file, "w") as f:
+        json.dump({"best_alpha": best_alpha, "best_avg_norm_acc": best_avg_norm_acc}, f)
+
+    return best_alpha
+
+def evaluate_scaled_model(args, encoder, task_vectors, datasets, alpha):
+    combined_vector = task_vectors[0] * alpha
+    for vec in task_vectors[1:]:
+        combined_vector += vec * alpha
+
+    blended_encoder = combined_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
+
+    test_accuracies, train_accuracies, fim_log_traces = [], [], []
     for dataset_name in datasets:
         dataset_path = resolve_dataset_path(args, dataset_name)
 
@@ -127,21 +169,32 @@ def evaluate_train_metrics(args, encoder, task_vectors, datasets, alpha):
 
         dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
         train_loader = dataset.train_loader
+        test_loader = dataset.test_loader
 
         head = get_classification_head(args, dataset_name).cuda()
         model = ImageClassifier(blended_encoder, head).cuda()
 
+        test_acc = evaluate_model(model, test_loader)
         train_acc = evaluate_model(model, train_loader)
-        train_accuracies.append(train_acc)
 
         criterion = torch.nn.CrossEntropyLoss()
         fim_log_trace = compute_fim_log_trace(model, train_loader, criterion, device=args.device)
+
+        test_accuracies.append(test_acc)
+        train_accuracies.append(train_acc)
         fim_log_traces.append(fim_log_trace)
 
-        print(f"✅ Train Accuracy for {dataset_name}: {train_acc:.4f}")
-        print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
+    avg_absolute_acc = np.mean(test_accuracies)
+    avg_normalized_acc = np.mean([test_acc / best_acc if best_acc != 0 else 0 for test_acc, best_acc in zip(test_accuracies, best_accuracies)])
 
-    return train_accuracies, fim_log_traces
+    return {
+        "alpha": alpha,
+        "test_accuracies": test_accuracies,
+        "train_accuracies": train_accuracies,
+        "fim_log_traces": fim_log_traces,
+        "avg_absolute_acc": avg_absolute_acc,
+        "avg_normalized_acc": avg_normalized_acc
+    }
 
 def main():
     args = parse_arguments()
@@ -151,32 +204,4 @@ def main():
     args.save = "/kaggle/working/checkpoints_baseline"
     args.batch_size = 32
 
-    datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
-
-    save_pretrained_model(args)
-
-    encoder = ImageEncoder(args).cuda()
-
-    task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
-
-    progress_file = os.path.join(args.results_dir, "progress.json")
-    with open(progress_file, "r") as f:
-        progress = json.load(f)
-        best_alpha = progress.get("best_alpha", 0)
-
-    train_accuracies, fim_log_traces = evaluate_train_metrics(args, encoder, task_vectors, datasets, best_alpha)
-
-    results = {
-        "train_accuracies": train_accuracies,
-        "fim_log_traces": fim_log_traces,
-        "alpha": best_alpha
-    }
-
-    save_path = os.path.join(args.results_dir, "train_metrics.json")
-    with open(save_path, "w") as f:
-        json.dump(results, f, indent=4)
-
-    print(f"✅ Train metrics saved to {save_path}")
-
-if __name__ == "__main__":
-    main()
+    datasets
