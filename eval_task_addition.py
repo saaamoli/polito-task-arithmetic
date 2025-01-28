@@ -165,24 +165,24 @@ def evaluate_multitask_metrics(args, encoder, task_vectors, datasets, alpha, tra
     return absolute_train_acc, absolute_test_acc, normalized_train_acc, normalized_test_acc, fim_log_traces
 
 def main():
+    # Parse arguments
     args = parse_arguments()
     args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
     args.data_location = "/kaggle/working/datasets"
     args.results_dir = "/kaggle/working/results"
     args.save = "/kaggle/working/checkpoints_baseline"
-    # Dynamically set the batch size for each dataset
-    for dataset_name in datasets:
-        args.batch_size = baseline_hyperparams[dataset_name]["batch_size"]
 
-
+    # Define the list of datasets
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
+    # Save the pre-trained model if it doesn't already exist
     save_pretrained_model(args)
 
+    # Load the pre-trained encoder and task vectors for each dataset
     encoder = ImageEncoder(args).cuda()
     task_vectors = [load_task_vector(args, dataset) for dataset in datasets]
 
-    # Load single-task metrics (pre-addition)
+    # Load single-task metrics
     single_task_accuracies = [
         json.load(open(os.path.join(args.results_dir, f"{dataset}_results.json")))['test_accuracy']
         for dataset in datasets
@@ -198,7 +198,7 @@ def main():
         for dataset in datasets
     ]
 
-    # Load or search for the best alpha
+    # Search for the best alpha or load it from progress
     progress_file = os.path.join(args.results_dir, "progress.json")
     if os.path.exists(progress_file):
         with open(progress_file, "r") as f:
@@ -208,6 +208,8 @@ def main():
     else:
         best_alpha, best_avg_norm_acc = 0, 0
         for alpha in np.arange(0.0, 1.05, 0.05):
+            # Dynamically set batch size for the first dataset (e.g., "DTD")
+            args.batch_size = baseline_hyperparams[datasets[0]]["batch_size"]
             avg_norm_acc, val_accuracies = evaluate_alpha(
                 args, encoder, task_vectors, datasets, alpha, single_task_accuracies
             )
@@ -220,12 +222,12 @@ def main():
 
     print(f"🏆 Best Alpha (α★): {best_alpha:.2f}")
 
-    # Evaluate multi-task metrics after addition
+    # Evaluate multi-task metrics after task addition
     absolute_train_acc, absolute_test_acc, normalized_train_acc, normalized_test_acc, fim_log_traces_scaled = (
         evaluate_multitask_metrics(args, encoder, task_vectors, datasets, best_alpha, train_accuracies, single_task_accuracies)
     )
 
-    # Save results
+    # Save the results
     results = {
         "alpha": best_alpha,
         "absolute_train_accuracy": absolute_train_acc,
@@ -239,6 +241,7 @@ def main():
         json.dump(results, f, indent=4)
 
     print(f"✅ Task addition metrics saved to {save_path}")
+
 
 
 if __name__ == "__main__":
