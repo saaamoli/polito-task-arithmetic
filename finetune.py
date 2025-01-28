@@ -119,15 +119,14 @@ if __name__ == "__main__":
     args.save = "/kaggle/working/checkpoints_baseline"  # New directory for baseline checkpoints
     args.data_location = "/kaggle/working/datasets"
 
-    # Baseline hyperparameters from Table 1
-    baseline_hyperparams = {
-        "DTD": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},  # Updated to match baseline
-        "EuroSAT": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
-        "GTSRB": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
-        "MNIST": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
-        "RESISC45": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
-        "SVHN": {"learning_rate": 1e-4, "batch_size": 32, "weight_decay": 0.0},
-    }
+    # Load hyperparameters from hyperparams.json
+    hyperparams_path = os.path.join('/kaggle/working/polito-task-arithmetic', 'hyperparams.json')
+    if not os.path.exists(hyperparams_path):
+        raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
+    
+    with open(hyperparams_path, "r") as f:
+        baseline_hyperparams = json.load(f)
+
 
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
     log_path = "/kaggle/working/baseline_results.json"
