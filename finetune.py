@@ -3,28 +3,24 @@ import sys
 import json
 import torch
 from argparse import ArgumentParser
-
-# Add project root to Python path
-sys.path.append('/kaggle/working/polito-task-arithmetic')
-print("Python Path:", sys.path)
-
 from datasets.common import get_dataloader, maybe_dictionarize
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from torchvision import transforms
 
+# Add project root to Python path
+sys.path.append('/kaggle/working/polito-task-arithmetic')
+print("Python Path:", sys.path)
 
 def parse_arguments():
     parser = ArgumentParser(description="Fine-tune image classifier on various datasets.")
     parser.add_argument("--data-location", type=str, required=True, help="Path to the dataset location.")
-    parser.add_argument("--save", type=str, required=True, help="Path to save the fine-tuned checkpoints.")
-    parser.add_argument("--learning-rate", type=float, default=1e-4, help="Learning rate for fine-tuning.")
-    parser.add_argument("--batch-size", type=int, default=32, help="Batch size for training.")
-    parser.add_argument("--weight-decay", type=float, default=0.0, help="Weight decay for optimizer.")
-    parser.add_argument("--model", type=str, default="resnet18", help="Model architecture to use.")
+    parser.add_argument("--save", type=str, required=True, help="Path to save fine-tuned checkpoints.")
+    parser.add_argument("--learning-rate", type=float, required=True, help="Learning rate for fine-tuning.")
+    parser.add_argument("--batch-size", type=int, required=True, help="Batch size for training.")
+    parser.add_argument("--weight-decay", type=float, required=True, help="Weight decay for optimizer.")
     return parser.parse_args()
-
 
 def resolve_dataset_path(data_location, dataset_name):
     dataset_name_lower = dataset_name.lower()
@@ -43,9 +39,8 @@ def resolve_dataset_path(data_location, dataset_name):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-
-def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
-    print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
+def fine_tune_on_dataset(args, dataset_name, num_epochs, log_path):
+    print(f"\n==== Fine-tuning on {dataset_name} with LR={args.learning_rate}, Batch Size={args.batch_size}, WD={args.weight_decay} ====\n")
 
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
@@ -59,8 +54,8 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    base_dataset_path = resolve_dataset_path(args.data_location, dataset_name)
-    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=base_dataset_path, batch_size=batch_size, num_workers=2)
+    dataset_path = resolve_dataset_path(args.data_location, dataset_name)
+    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=dataset_path, batch_size=args.batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
     val_loader = get_dataloader(dataset, is_train=False, args=args)
 
@@ -72,10 +67,10 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     for param in model.classification_head.parameters():
         param.requires_grad = False
 
-    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
 
-    results = {"dataset": dataset_name, "lr": learning_rate, "batch_size": batch_size, "weight_decay": weight_decay, "epochs": []}
+    results = {"dataset": dataset_name, "lr": args.learning_rate, "batch_size": args.batch_size, "weight_decay": args.weight_decay, "epochs": []}
 
     for epoch in range(num_epochs):
         model.train()
@@ -120,22 +115,13 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     with open(log_path, "a") as log_file:
         log_file.write(json.dumps(results) + "\n")
 
-
 if __name__ == "__main__":
     args = parse_arguments()
 
-    # Define dataset epochs mapping
+    # Define dataset and epoch mapping
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
     log_path = os.path.join(args.save, "baseline_results.json")
 
-    # Iterate over each dataset
+    # Iterate over datasets and epochs
     for dataset_name, num_epochs in dataset_epochs.items():
-        fine_tune_on_dataset(
-            args,
-            dataset_name,
-            num_epochs,
-            args.learning_rate,
-            args.batch_size,
-            args.weight_decay,
-            log_path,
-        )
+        fine_tune_on_dataset(args, dataset_name, num_epochs, log_path)
