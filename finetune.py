@@ -17,9 +17,7 @@ def parse_arguments():
     parser = ArgumentParser(description="Fine-tune image classifier on various datasets.")
     parser.add_argument("--data-location", type=str, required=True, help="Path to the dataset location.")
     parser.add_argument("--save", type=str, required=True, help="Path to save fine-tuned checkpoints.")
-    parser.add_argument("--learning-rate", type=float, required=True, help="Learning rate for fine-tuning.")
-    parser.add_argument("--batch-size", type=int, required=True, help="Batch size for training.")
-    parser.add_argument("--weight-decay", type=float, required=True, help="Weight decay for optimizer.")
+    parser.add_argument("--model", type=str, default="resnet18", help="Model architecture to use.")
     return parser.parse_args()
 
 def resolve_dataset_path(data_location, dataset_name):
@@ -39,8 +37,8 @@ def resolve_dataset_path(data_location, dataset_name):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-def fine_tune_on_dataset(args, dataset_name, num_epochs, log_path):
-    print(f"\n==== Fine-tuning on {dataset_name} with LR={args.learning_rate}, Batch Size={args.batch_size}, WD={args.weight_decay} ====\n")
+def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
+    print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
 
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
@@ -55,9 +53,15 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, log_path):
     ])
 
     dataset_path = resolve_dataset_path(args.data_location, dataset_name)
-    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=dataset_path, batch_size=args.batch_size, num_workers=2)
+    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=dataset_path, batch_size=batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
     val_loader = get_dataloader(dataset, is_train=False, args=args)
+
+    # Ensure required attributes in args
+    if not hasattr(args, "image_size"):
+        args.image_size = 224  # Default image size
+    if not hasattr(args, "num_classes"):
+        args.num_classes = len(dataset.classes)  # Infer number of classes from dataset
 
     encoder = ImageEncoder(args).cuda()
     head = get_classification_head(args, dataset_name).cuda()
@@ -67,10 +71,10 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, log_path):
     for param in model.classification_head.parameters():
         param.requires_grad = False
 
-    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=args.learning_rate, weight_decay=args.weight_decay)
+    optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
 
-    results = {"dataset": dataset_name, "lr": args.learning_rate, "batch_size": args.batch_size, "weight_decay": args.weight_decay, "epochs": []}
+    results = {"dataset": dataset_name, "lr": learning_rate, "batch_size": batch_size, "weight_decay": weight_decay, "epochs": []}
 
     for epoch in range(num_epochs):
         model.train()
@@ -117,11 +121,20 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, log_path):
 
 if __name__ == "__main__":
     args = parse_arguments()
+    args.save = "/kaggle/working/checkpoints_baseline"  # New directory for baseline checkpoints
+    args.data_location = "/kaggle/working/datasets"
 
-    # Define dataset and epoch mapping
+    # Define datasets and epochs
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
     log_path = os.path.join(args.save, "baseline_results.json")
 
-    # Iterate over datasets and epochs
     for dataset_name, num_epochs in dataset_epochs.items():
-        fine_tune_on_dataset(args, dataset_name, num_epochs, log_path)
+        fine_tune_on_dataset(
+            args,
+            dataset_name,
+            num_epochs,
+            learning_rate=1e-4,
+            batch_size=32,
+            weight_decay=0.0,
+            log_path=log_path,
+        )
