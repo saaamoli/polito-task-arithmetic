@@ -71,6 +71,62 @@ def evaluate_model(model, dataloader):
             total += labels.size(0)
     return correct / total
 
+def compute_fim_log_trace(model, dataloader, criterion, device):
+    fim = {}
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            fim[name] = torch.zeros_like(param)
+
+    total_samples = 0
+    max_samples = 5000  # Increased sample size for better approximation
+    scaling_factor = 1e3  # Gradient scaling to stabilize small values
+    dataloader_iterator = iter(dataloader)
+
+    print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
+    while total_samples < max_samples:
+        try:
+            batch = next(dataloader_iterator)
+        except StopIteration:
+            dataloader_iterator = iter(dataloader)  # Restart iterator if exhausted
+            batch = next(dataloader_iterator)
+
+        # Handle batch types
+        if isinstance(batch, dict):
+            inputs, labels = batch['images'].to(device), batch['labels'].to(device)
+        elif isinstance(batch, (list, tuple)):
+            inputs, labels = batch[0].to(device), batch[1].to(device)
+        else:
+            raise TypeError(f"Unexpected batch type: {type(batch)}")
+
+        model.zero_grad()
+
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+
+        if not loss.requires_grad:
+            raise ValueError("Loss does not require gradients. Check the computation graph.")
+
+        loss.backward(retain_graph=True)
+
+        for name, param in model.named_parameters():
+            if param.requires_grad and param.grad is not None:
+                fim[name] += scaling_factor * param.grad.pow(2)  # Scale gradients to stabilize FIM computation
+
+        total_samples += inputs.size(0)
+        if total_samples >= max_samples:
+            print(f"Processed {total_samples} samples for FIM computation.")
+            break
+
+    fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
+    print(f"Raw FIM Trace Sum: {fim_trace}")
+
+    # Normalize and safeguard trace computation
+    normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)  # Avoid division by zero
+    fim_log_trace = torch.log(torch.tensor(normalized_trace))
+
+    print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
+    return fim_log_trace.item()
+
 def compute_average_normalized_accuracy(val_accuracies, single_task_accuracies):
     return np.mean([val / single if single != 0 else 0 for val, single in zip(val_accuracies, single_task_accuracies)])
 
