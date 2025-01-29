@@ -116,7 +116,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 
 if __name__ == "__main__":
     args = parse_arguments()
-    args.save = "/kaggle/working/checkpoints_baseline"  # New directory for baseline checkpoints
+    args.save = "/kaggle/working/checkpoints_lr"  # New directory for baseline checkpoints
     args.data_location = "/kaggle/working/datasets"
 
     # Load hyperparameters from hyperparams.json
