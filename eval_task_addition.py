@@ -223,10 +223,10 @@ def evaluate_multitask_metrics(args, encoder, task_vectors, datasets, alpha, tra
 def main():
     # Parse arguments
     args = parse_arguments()
-    args.checkpoints_path = "/kaggle/working/checkpoints_lr"
+    args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
     args.data_location = "/kaggle/working/datasets"
-    args.results_dir = "/kaggle/working/results_lr"
-    args.save = "/kaggle/working/checkpoints_lr"
+    args.results_dir = "/kaggle/working/results_baseline"
+    args.save = "/kaggle/working/checkpoints_baseline"
 
     # Define the list of datasets
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
