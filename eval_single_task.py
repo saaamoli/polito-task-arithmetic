@@ -80,61 +80,55 @@ def evaluate_model(model, dataloader):
 
     return correct / total
 
-def compute_fim_log_trace(model, dataloader, criterion, device):
-    fim = {}
+def compute_fim_log_trace(model, dataloader, criterion, device, max_samples=10000):
+    fim_diag = {}
     for name, param in model.named_parameters():
         if param.requires_grad:
-            fim[name] = torch.zeros_like(param)
+            fim_diag[name] = torch.zeros_like(param)
 
+    model.train()
     total_samples = 0
-    max_samples = 5000  # Increased sample size for better approximation
-    scaling_factor = 1e3  # Gradient scaling to stabilize small values
-    dataloader_iterator = iter(dataloader)
 
-    print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
-    while total_samples < max_samples:
-        try:
-            batch = next(dataloader_iterator)
-        except StopIteration:
-            dataloader_iterator = iter(dataloader)  # Restart iterator if exhausted
-            batch = next(dataloader_iterator)
+    print("🔍 Computing diagonal FIM over training data...")
+    for batch in dataloader:
+        if total_samples >= max_samples:
+            break
 
-        # Handle batch types
+        # Extract inputs and labels
         if isinstance(batch, dict):
             inputs, labels = batch['images'].to(device), batch['labels'].to(device)
         elif isinstance(batch, (list, tuple)):
             inputs, labels = batch[0].to(device), batch[1].to(device)
         else:
-            raise TypeError(f"Unexpected batch type: {type(batch)}")
+            continue
+
+        batch_size = inputs.size(0)
+        outputs = model(inputs)
+
+        # Compute log-probs
+        log_probs = torch.nn.functional.log_softmax(outputs, dim=1)
+
+        # Sample from predicted distribution (empirical Fisher)
+        sampled_classes = torch.distributions.Categorical(logits=outputs).sample()
+        loss = -log_probs[range(batch_size), sampled_classes].mean()
 
         model.zero_grad()
+        loss.backward()
 
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-
-        if not loss.requires_grad:
-            raise ValueError("Loss does not require gradients. Check the computation graph.")
-
-        loss.backward(retain_graph=True)
-
+        # Accumulate squared gradients (diagonal)
         for name, param in model.named_parameters():
             if param.requires_grad and param.grad is not None:
-                fim[name] += scaling_factor * param.grad.pow(2)  # Scale gradients to stabilize FIM computation
+                fim_diag[name] += param.grad.detach() ** 2
 
-        total_samples += inputs.size(0)
-        if total_samples >= max_samples:
-            print(f"Processed {total_samples} samples for FIM computation.")
-            break
+        total_samples += batch_size
 
-    fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
-    print(f"Raw FIM Trace Sum: {fim_trace}")
+    # Normalize and compute trace
+    fim_trace = sum(param.sum().item() for param in fim_diag.values()) / total_samples
+    fim_log_trace = torch.log(torch.tensor(fim_trace + 1e-6))  # Avoid log(0)
 
-    # Normalize and safeguard trace computation
-    normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)  # Avoid division by zero
-    fim_log_trace = torch.log(torch.tensor(normalized_trace))
-
-    print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
+    print(f"📊 FIM Log Trace (normalized): {fim_log_trace.item():.4f}")
     return fim_log_trace.item()
+
 
 def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -198,7 +192,7 @@ def main():
 
     # Define necessary paths
     args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
-    args.results_dir = "/kaggle/working/results_baseline"
+    args.results_dir = "/kaggle/working/results_baseline2"
     args.data_location = "/kaggle/working/datasets"
     args.save = "/kaggle/working/checkpoints_baseline"
 
