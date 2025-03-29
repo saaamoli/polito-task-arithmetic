@@ -216,7 +216,7 @@ def main():
     args = parse_arguments()
     args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
     args.data_location = "/kaggle/working/datasets"
-    args.results_dir = "/kaggle/working/results_baseline2"
+    args.results_dir = "/kaggle/working/results_baseline3"
     args.save = "/kaggle/working/checkpoints_baseline"
 
     # Define the list of datasets
