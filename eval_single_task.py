@@ -190,7 +190,7 @@ def main():
 
     # Define necessary paths
     args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
-    args.results_dir = "/kaggle/working/results_baseline2"
+    args.results_dir = "/kaggle/working/results_baseline3"
     args.data_location = "/kaggle/working/datasets"
     args.save = "/kaggle/working/checkpoints_baseline"
 
