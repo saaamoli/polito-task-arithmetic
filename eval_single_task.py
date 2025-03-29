@@ -80,7 +80,7 @@ def evaluate_model(model, dataloader):
 
     return correct / total
 
-def compute_fim_log_trace(model, dataloader, criterion, device, max_samples=10000):
+def compute_fim_log_trace(model, dataloader, criterion, device, max_samples=20000):
     fim_diag = {}
     for name, param in model.named_parameters():
         if param.requires_grad:
@@ -89,45 +89,43 @@ def compute_fim_log_trace(model, dataloader, criterion, device, max_samples=1000
     model.train()
     total_samples = 0
 
-    print("🔍 Computing diagonal FIM over training data...")
+    print("🔍 Computing FIM log-trace...")
+
     for batch in dataloader:
         if total_samples >= max_samples:
             break
 
-        # Extract inputs and labels
+        # Parse batch
         if isinstance(batch, dict):
             inputs, labels = batch['images'].to(device), batch['labels'].to(device)
-        elif isinstance(batch, (list, tuple)):
-            inputs, labels = batch[0].to(device), batch[1].to(device)
         else:
-            continue
+            inputs, labels = batch[0].to(device), batch[1].to(device)
 
         batch_size = inputs.size(0)
         outputs = model(inputs)
 
-        # Compute log-probs
-        log_probs = torch.nn.functional.log_softmax(outputs, dim=1)
-
-        # Sample from predicted distribution (empirical Fisher)
-        sampled_classes = torch.distributions.Categorical(logits=outputs).sample()
-        loss = -log_probs[range(batch_size), sampled_classes].mean()
+        # Use true labels (not sampled)
+        loss = criterion(outputs, labels)
 
         model.zero_grad()
         loss.backward()
 
-        # Accumulate squared gradients (diagonal)
         for name, param in model.named_parameters():
             if param.requires_grad and param.grad is not None:
                 fim_diag[name] += param.grad.detach() ** 2
 
         total_samples += batch_size
 
-    # Normalize and compute trace
-    fim_trace = sum(param.sum().item() for param in fim_diag.values()) / total_samples
-    fim_log_trace = torch.log(torch.tensor(fim_trace + 1e-6))  # Avoid log(0)
+    # Normalize per sample
+    for name in fim_diag:
+        fim_diag[name] /= total_samples
 
-    print(f"📊 FIM Log Trace (normalized): {fim_log_trace.item():.4f}")
+    fim_trace = sum(param.sum().item() for param in fim_diag.values())
+    fim_log_trace = torch.log(torch.tensor(fim_trace + 1e-6))
+
+    print(f"📊 Final FIM log trace: {fim_log_trace.item():.4f}")
     return fim_log_trace.item()
+
 
 
 def save_results(results, save_path):
