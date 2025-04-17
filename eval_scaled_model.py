@@ -56,8 +56,9 @@ def evaluate_scaled_model():
         )
 
         # Apply θ₀ + α⋆ * τₜ
-        task_vector.scale(alpha_star)  # Scale BEFORE applying
-        encoder = task_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
+        scaled_vector = task_vector * alpha_star
+        encoder = scaled_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
+
 
         
 
