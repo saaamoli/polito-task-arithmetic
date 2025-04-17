@@ -32,7 +32,7 @@ def evaluate_scaled_model():
     args.model = "ViT-B-32__pretrained__openai"
     args.cache_dir = None
     args.openclip_cachedir = None
-    args.checkpoints_path = "/kaggle/working/checkpoints_batchsize"
+    args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
     args.results_dir = "/kaggle/working/results_after_scaling"
     args.save = args.results_dir
     args.device = "cuda"
