@@ -28,6 +28,24 @@ def evaluate_model(model, dataloader):
     return correct / total
 
 
+def resolve_dataset_path(base_path, dataset_name):
+    dataset_name_lower = dataset_name.lower()
+    if dataset_name_lower == "dtd":
+        return os.path.join(base_path, "dtd")
+    elif dataset_name_lower == "eurosat":
+        return base_path
+    elif dataset_name_lower == "mnist":
+        return os.path.join(base_path, "MNIST", "raw")
+    elif dataset_name_lower == "gtsrb":
+        return os.path.join(base_path, "gtsrb")
+    elif dataset_name_lower == "resisc45":
+        return base_path
+    elif dataset_name_lower == "svhn":
+        return os.path.join(base_path, "svhn")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--alpha", type=float, default=0.3)
@@ -52,6 +70,7 @@ def main():
 
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
+        dataset_path = resolve_dataset_path(args.data_location, dataset_name)
         finetuned_path = os.path.join(args.checkpoints_dir, f"{dataset_name}_finetuned.pt")
         task_vector = NonLinearTaskVector(args.pretrained_path, finetuned_path)
         encoder = task_vector.apply_to(args.pretrained_path, scaling_coef=args.alpha).cuda()
@@ -66,9 +85,9 @@ def main():
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
-        dataset = get_dataset(f"{dataset_name}Val", preprocess, args.data_location, batch_size=args.batch_size)
+        dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, batch_size=args.batch_size)
         train_loader = dataset.train_loader
-        test_dataset = get_dataset(dataset_name, preprocess, args.data_location, batch_size=args.batch_size)
+        test_dataset = get_dataset(dataset_name, preprocess, dataset_path, batch_size=args.batch_size)
         test_loader = test_dataset.test_loader
 
         train_acc = evaluate_model(model, train_loader)
