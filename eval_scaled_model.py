@@ -40,29 +40,38 @@ def evaluate_scaled_model():
 
     os.makedirs(args.results_dir, exist_ok=True)
 
-    alpha_star = 0.3  # Your best alpha found in task addition
+    result_file = os.path.join(args.results_dir, "after_scaling_all_results.json")
+    if os.path.exists(result_file):
+        with open(result_file, "r") as f:
+            existing_results = json.load(f)
+        evaluated_datasets = {entry["dataset"] for entry in existing_results}
+    else:
+        existing_results = []
+        evaluated_datasets = set()
+
+    alpha_star = 0.3
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
     results = []
 
     for dataset_name in datasets:
+        if dataset_name in evaluated_datasets:
+            print(f"⏭️ Skipping {dataset_name} — already evaluated.")
+            continue
+
         print(f"🔍 Evaluating after-scaling model for {dataset_name}")
         args.data_location = resolve_dataset_path(args, dataset_name)
 
-        # Load task vector
         task_vector = NonLinearTaskVector(
             pretrained_checkpoint=os.path.join(args.checkpoints_path, "pretrained.pt"),
             finetuned_checkpoint=os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
         )
 
-        # Apply θ₀ + α⋆ * τₜ
         scaled_vector = task_vector * alpha_star
         encoder = scaled_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
 
-        # Load classification head
         head = get_classification_head(args, f"{dataset_name}Val").cuda()
         model = ImageClassifier(encoder, head).cuda()
 
-        # Load dataset
         preprocess = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -73,7 +82,6 @@ def evaluate_scaled_model():
         train_loader = dataset.train_loader
         test_loader = dataset.test_loader
 
-        # Evaluate
         def eval_model(model, loader):
             model.eval()
             correct, total = 0, 0
@@ -100,8 +108,8 @@ def evaluate_scaled_model():
             "fim_log_trace": fim_log_trace
         })
 
-    with open(os.path.join(args.results_dir, "after_scaling_all_results.json"), "w") as f:
-        json.dump(results, f, indent=4)
+    with open(result_file, "w") as f:
+        json.dump(existing_results + results, f, indent=4)
     print("✅ All after-scaling results saved!")
 
 if __name__ == "__main__":
