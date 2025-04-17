@@ -33,17 +33,18 @@ def resolve_dataset_path(base_path, dataset_name):
     if dataset_name_lower == "dtd":
         return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
-        return os.path.join(base_path, "eurosat")
+        return base_path
     elif dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
         return os.path.join(base_path, "gtsrb")
     elif dataset_name_lower == "resisc45":
-        return os.path.join(base_path, "resisc45")
+        return base_path
     elif dataset_name_lower == "svhn":
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
 
 
 def main():
@@ -70,7 +71,7 @@ def main():
 
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
-        dataset_path = resolve_dataset_path(args.data_location, dataset_name)
+        dataset_path = resolve_dataset_path(args.data_location, dataset_name)  
         finetuned_path = os.path.join(args.checkpoints_dir, f"{dataset_name}_finetuned.pt")
         task_vector = NonLinearTaskVector(args.pretrained_path, finetuned_path)
         encoder = task_vector.apply_to(args.pretrained_path, scaling_coef=args.alpha).cuda()
