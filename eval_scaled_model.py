@@ -56,9 +56,9 @@ def evaluate_scaled_model():
         )
 
         # Apply θ₀ + α⋆ * τₜ
-        encoder = task_vector.apply_to(
-            os.path.join(args.checkpoints_path, "pretrained.pt"),
-            scale=alpha_star
+        task_vector.scale(alpha_star)  # Scale BEFORE applying
+        encoder = task_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
+
         )
 
         # Load classification head
