@@ -1,4 +1,3 @@
-
 import os
 import json
 import torch
@@ -37,6 +36,7 @@ def evaluate_scaled_model():
     args.results_dir = "/kaggle/working/results_after_scaling"
     args.save = args.results_dir
     args.device = "cuda"
+    args.data_location = "/kaggle/working/datasets"
 
     os.makedirs(args.results_dir, exist_ok=True)
 
@@ -46,10 +46,7 @@ def evaluate_scaled_model():
 
     for dataset_name in datasets:
         print(f"🔍 Evaluating after-scaling model for {dataset_name}")
-        args.data_location = "/kaggle/working/datasets"  
-        dataset_path = resolve_dataset_path(args, dataset_name)
-
-
+        args.data_location = resolve_dataset_path(args, dataset_name)
 
         # Load task vector
         task_vector = NonLinearTaskVector(
@@ -60,9 +57,6 @@ def evaluate_scaled_model():
         # Apply θ₀ + α⋆ * τₜ
         scaled_vector = task_vector * alpha_star
         encoder = scaled_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
-
-
-        
 
         # Load classification head
         head = get_classification_head(args, f"{dataset_name}Val").cuda()
@@ -75,7 +69,6 @@ def evaluate_scaled_model():
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        args.data_location = dataset_path  # 🔧 critical fix
         dataset = get_dataset(f"{dataset_name}Val", preprocess, args.data_location, args.batch_size)
         train_loader = dataset.train_loader
         test_loader = dataset.test_loader
