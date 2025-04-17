@@ -51,7 +51,6 @@ def evaluate_scaled_model():
 
     alpha_star = 0.3
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
-    results = []
 
     for dataset_name in datasets:
         if dataset_name in evaluated_datasets:
@@ -100,17 +99,20 @@ def evaluate_scaled_model():
 
         print(f"✅ {dataset_name}: Train Acc={train_acc:.4f}, Test Acc={test_acc:.4f}, FIM={fim_log_trace:.4f}")
 
-        results.append({
+        # Save after each dataset
+        result = {
             "dataset": dataset_name,
             "alpha": alpha_star,
             "scaled_train_accuracy": train_acc,
             "scaled_test_accuracy": test_acc,
             "fim_log_trace": fim_log_trace
-        })
+        }
+        existing_results.append(result)
+        with open(result_file, "w") as f:
+            json.dump(existing_results, f, indent=4)
+        print(f"💾 Saved result for {dataset_name}")
 
-    with open(result_file, "w") as f:
-        json.dump(existing_results + results, f, indent=4)
-    print("✅ All after-scaling results saved!")
+    print("✅ All after-scaling results completed and saved!")
 
 if __name__ == "__main__":
     evaluate_scaled_model()
