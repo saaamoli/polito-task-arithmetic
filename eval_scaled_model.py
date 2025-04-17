@@ -32,15 +32,19 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dataset", type=str, required=True)
     parser.add_argument("--alpha", type=float, default=0.3)
-    parser.add_argument("--pretrained_path", type=str, default="/kaggle/working/checkpoints_batchsize/zeroshot.pt")
+    parser.add_argument("--pretrained_path", type=str, default="/kaggle/working/checkpoints_batchsize/pretrained.pt")
     parser.add_argument("--finetuned_path", type=str, required=True)
     parser.add_argument("--results_dir", type=str, default="/kaggle/working/results_after_scaling")
     parser.add_argument("--data_location", type=str, default="/kaggle/working/datasets")
+    parser.add_argument("--batch_size", type=int, default=32)
     args = parser.parse_args()
+
+    # Add missing attributes to match other scripts
     args.model = "ViT-B-32__pretrained__openai"
     args.save = args.results_dir
+    args.device = "cuda"
+    args.cache_dir = None
     args.openclip_cachedir = None
-
 
     os.makedirs(args.results_dir, exist_ok=True)
 
@@ -61,9 +65,9 @@ def main():
     ])
 
     # Load data
-    dataset = get_dataset(f"{args.dataset}Val", preprocess, args.data_location, batch_size=32)
+    dataset = get_dataset(f"{args.dataset}Val", preprocess, args.data_location, batch_size=args.batch_size)
     train_loader = dataset.train_loader
-    test_dataset = get_dataset(args.dataset, preprocess, args.data_location, batch_size=32)
+    test_dataset = get_dataset(args.dataset, preprocess, args.data_location, batch_size=args.batch_size)
     test_loader = test_dataset.test_loader
 
     # Evaluate
