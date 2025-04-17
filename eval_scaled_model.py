@@ -5,7 +5,7 @@ import argparse
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from datasets.registry import get_dataset
-from utils import compute_fim_log_trace
+from utils import train_diag_fim_logtr as compute_fim_log_trace
 from torchvision import transforms
 from task_vectors import NonLinearTaskVector
 from args import parse_arguments
