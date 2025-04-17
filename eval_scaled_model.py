@@ -73,7 +73,7 @@ def main():
     # Evaluate
     train_acc = evaluate_model(model, train_loader)
     test_acc = evaluate_model(model, test_loader)
-    fim_log_trace = compute_fim_log_trace(model, train_loader, torch.nn.CrossEntropyLoss(), device='cuda')
+    fim_log_trace = compute_fim_log_trace(args, model, args.dataset, samples_nr=2000)
 
     # Save results
     result = {
