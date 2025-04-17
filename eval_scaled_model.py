@@ -37,6 +37,7 @@ def main():
     parser.add_argument("--results_dir", type=str, default="/kaggle/working/results_after_scaling")
     parser.add_argument("--data_location", type=str, default="/kaggle/working/datasets")
     args = parser.parse_args()
+    args.save = args.results_dir
 
     os.makedirs(args.results_dir, exist_ok=True)
 
