@@ -46,8 +46,10 @@ def evaluate_scaled_model():
 
     for dataset_name in datasets:
         print(f"🔍 Evaluating after-scaling model for {dataset_name}")
+        args.data_location = "/kaggle/working/datasets"  
         dataset_path = resolve_dataset_path(args, dataset_name)
-        args.data_location = dataset_path
+
+
 
         # Load task vector
         task_vector = NonLinearTaskVector(
