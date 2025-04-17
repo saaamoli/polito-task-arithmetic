@@ -39,6 +39,8 @@ def main():
     args = parser.parse_args()
     args.model = "ViT-B-32__pretrained__openai"
     args.save = args.results_dir
+    args.openclip_cachedir = None
+
 
     os.makedirs(args.results_dir, exist_ok=True)
 
