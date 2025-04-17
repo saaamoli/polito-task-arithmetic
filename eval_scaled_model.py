@@ -75,7 +75,8 @@ def evaluate_scaled_model():
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
-        dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
+        args.data_location = dataset_path  # 🔧 critical fix
+        dataset = get_dataset(f"{dataset_name}Val", preprocess, args.data_location, args.batch_size)
         train_loader = dataset.train_loader
         test_loader = dataset.test_loader
 
