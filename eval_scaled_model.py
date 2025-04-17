@@ -59,7 +59,7 @@ def evaluate_scaled_model():
         task_vector.scale(alpha_star)  # Scale BEFORE applying
         encoder = task_vector.apply_to(os.path.join(args.checkpoints_path, "pretrained.pt"))
 
-        )
+        
 
         # Load classification head
         head = get_classification_head(args, f"{dataset_name}Val").cuda()
