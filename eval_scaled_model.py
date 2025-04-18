@@ -33,7 +33,7 @@ def evaluate_scaled_model():
     args.cache_dir = None
     args.openclip_cachedir = None
     args.checkpoints_path = "/kaggle/working/checkpoints_batchsize"
-    args.results_dir = "/kaggle/working/results_after_scaling2"
+    args.results_dir = "/kaggle/working/results_after_scaling"
     args.save = args.results_dir
     args.device = "cuda"
     args.data_location = "/kaggle/working/datasets"
