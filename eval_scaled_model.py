@@ -32,7 +32,7 @@ def evaluate_scaled_model():
     args.model = "ViT-B-32__pretrained__openai"
     args.cache_dir = None
     args.openclip_cachedir = None
-    args.checkpoints_path = "/kaggle/working/checkpoints_baseline"
+    args.checkpoints_path = "/kaggle/working/checkpoints_batchsize"
     args.results_dir = "/kaggle/working/results_after_scaling"
     args.save = args.results_dir
     args.device = "cuda"
@@ -49,7 +49,7 @@ def evaluate_scaled_model():
         existing_results = []
         evaluated_datasets = set()
 
-    alpha_star = 0.3
+    alpha_star = 0.25
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
     for dataset_name in datasets:
