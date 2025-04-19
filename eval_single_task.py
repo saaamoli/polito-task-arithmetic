@@ -197,10 +197,10 @@ def main():
     args = parse_arguments()
 
     # Define necessary paths
-    args.checkpoints_path = "/kaggle/working/checkpoints_batchsize"
-    args.results_dir = "/kaggle/working/results_batchsize"
+    args.checkpoints_path = "/kaggle/working/checkpoints_batchsize8"
+    args.results_dir = "/kaggle/working/results_batchsize8"
     args.data_location = "/kaggle/working/datasets"
-    args.save = "/kaggle/working/checkpoints_batchsize"
+    args.save = "/kaggle/working/checkpoints_batchsize8"
 
     # List of datasets to evaluate
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
