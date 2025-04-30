@@ -116,7 +116,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 
 if __name__ == "__main__":
     args = parse_arguments()
-    args.save = "/kaggle/working/checkpoints_batchsize8"  # New directory for baseline checkpoints
+    args.save = "/kaggle/working/checkpoints_lr"  # New directory for lr checkpoints
     args.data_location = "/kaggle/working/datasets"
 
     # Load hyperparameters from hyperparams.json
@@ -129,7 +129,7 @@ if __name__ == "__main__":
 
 
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
-    log_path = "/kaggle/working/batchsize8_results.json"
+    log_path = "/kaggle/working/lr_results.json"
 
     for dataset_name, num_epochs in dataset_epochs.items():
         hyperparams = baseline_hyperparams[dataset_name]
