@@ -49,7 +49,7 @@ def evaluate_scaled_model():
         existing_results = []
         evaluated_datasets = set()
 
-    alpha_star = 0.35
+    alpha_star = 0.25
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
 
     for dataset_name in datasets:
