@@ -4,7 +4,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 from datasets.registry import get_dataset
-from datasets.common import maybe_dictionarize
+from datasets.common import maybe_dictionarize, get_dataloader
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
