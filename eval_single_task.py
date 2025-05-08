@@ -150,7 +150,7 @@ def evaluate_and_save(args, dataset_name):
 
     # Set dataset path
     dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = dataset_path
+    # args.data_location = dataset_path
 
     # Define preprocessing pipeline
     preprocess = transforms.Compose([
