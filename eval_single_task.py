@@ -148,9 +148,11 @@ def evaluate_and_save(args, dataset_name):
         print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
         return
 
+    # Set the dataset path (your "/kaggle/working/datasets/...")
     dataset_path = resolve_dataset_path(args, dataset_name)
     args.data_location = dataset_path
 
+    # Define preprocessing pipeline
     preprocess = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -158,31 +160,36 @@ def evaluate_and_save(args, dataset_name):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
-    train_loader = dataset.train_loader  # Training set for metrics computation
-    val_loader = dataset.train_loader  # Validation set
-    test_loader = dataset.test_loader  # Test set
+    # 1. Train/Val split (random 90/10 split from the 'train' folder)
+    val_dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
+    train_loader = get_dataloader(val_dataset, is_train=True, args=args)
+    val_loader = get_dataloader(val_dataset, is_train=False, args=args)
 
+    # 2. Test split (loaded from the real 'test' folder)
+    test_dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
+    test_loader = get_dataloader(test_dataset, is_train=False, args=args)
+
+    # Load the fine-tuned model for the dataset
     model = load_finetuned_model(args, dataset_name)
 
-    # Compute train accuracy
+    # Compute Train Accuracy
     train_acc = evaluate_model(model, train_loader)
     print(f"✅ Train Accuracy for {dataset_name}: {train_acc:.4f}")
 
-    # Compute validation accuracy
+    # Compute Validation Accuracy
     val_acc = evaluate_model(model, val_loader)
     print(f"✅ Validation Accuracy for {dataset_name}: {val_acc:.4f}")
 
-    # Compute test accuracy
+    # Compute Test Accuracy
     test_acc = evaluate_model(model, test_loader)
     print(f"✅ Test Accuracy for {dataset_name}: {test_acc:.4f}")
 
-    # Compute FIM log-trace on the training set
+    # Compute Log-Trace of Diagonal FIM on training set
     criterion = torch.nn.CrossEntropyLoss()
     fim_log_trace = compute_fim_log_trace(model, train_loader, criterion, device=args.device)
     print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
 
-    # Save results
+    # Save all results to JSON
     results = {
         "dataset": dataset_name,
         "train_accuracy": train_acc,
