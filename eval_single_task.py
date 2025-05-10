@@ -28,6 +28,7 @@ def load_finetuned_model(args, dataset_name):
 
     encoder = torch.load(encoder_checkpoint_path).cuda()
 
+    # Where the head will be saved
     head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
     if os.path.exists(head_path):
         print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
@@ -35,23 +36,19 @@ def load_finetuned_model(args, dataset_name):
     else:
         print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
 
-        # 🔒 Save current args.data_location (likely pointing to e.g. /datasets/dtd)
-        original_data_location = args.data_location
+        # ✅ Force dataset root for head generation
+        from copy import deepcopy
+        args_for_head = deepcopy(args)
+        args_for_head.data_location = "/kaggle/working/datasets"
 
-        # 🧠 Set the correct global dataset root for head generation
-        args.data_location = "/kaggle/working/datasets"
-
-        # ✅ Explicitly request head for DTDVal, etc.
-        head_dataset_name = f"{dataset_name}Val"
-        head = get_classification_head(args, head_dataset_name).cuda()
-
-        # 🔁 Restore original location
-        args.data_location = original_data_location
+        # Explicitly use DTDVal etc.
+        head = get_classification_head(args_for_head, f"{dataset_name}Val").cuda()
 
         head.save(head_path)
         print(f"✅ Generated and saved classification head at {head_path}")
 
     return ImageClassifier(encoder, head).cuda()
+
 
 
 def resolve_dataset_path(args, dataset_name):
