@@ -20,7 +20,7 @@ def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
     if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")
+        return os.path.join(base_path)
     elif dataset_name_lower == "eurosat":
         return base_path
     elif dataset_name_lower == "mnist":
@@ -49,18 +49,14 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         args.data_location = original_data_location  # restore before return
         return
 
-    preprocess = transforms.Compose([
-        transforms.Resize((224, 224)),
-        transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-    ])
+    encoder = ImageEncoder(args).cuda()
+    preprocess = encoder.train_preprocess
+
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=args.data_location, batch_size=batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
     val_loader = get_dataloader(dataset, is_train=False, args=args)
 
-    encoder = ImageEncoder(args).cuda()
     head = get_classification_head(args, dataset_name).cuda()
     model = ImageClassifier(encoder, head).cuda()
 
