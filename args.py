@@ -78,14 +78,6 @@ def parse_arguments():
         default=None,
         help="Optionally save a _classifier_, e.g. a zero shot classifier or probe.",
     )
-    
-    parser.add_argument(
-    "--checkpoints-path",
-    type=str,
-    default="/kaggle/working/checkpoints",
-    help="Path to the fine-tuned model checkpoints."
-)
-
     parser.add_argument(
         "--cache-dir",
         type=str,
