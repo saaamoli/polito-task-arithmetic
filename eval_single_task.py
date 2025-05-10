@@ -210,8 +210,10 @@ def evaluate_and_save(args, dataset_name):
     # ✅ Restore original data location for the next dataset
     args.data_location = original_data_location
 
-    print(f"Val samples: {len(val_loader.dataset)}")
-    print(f"Test samples: {len(test_loader.dataset)}")
+    val_ids = set([tuple(x.cpu().numpy().flatten()) for x, _ in val_loader.dataset])
+    test_ids = set([tuple(x.cpu().numpy().flatten()) for x, _ in test_loader.dataset])
+    print("Overlap between val and test samples:", len(val_ids & test_ids))
+
 
 
 
