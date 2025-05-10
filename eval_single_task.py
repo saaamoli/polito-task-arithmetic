@@ -27,7 +27,7 @@ def load_finetuned_model(args, dataset_name):
     if not os.path.exists(encoder_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
 
-    encoder = torch.load(encoder_checkpoint_path).cuda()
+    encoder = ImageEncoder.load(args.model, encoder_checkpoint_path).cuda()
 
     if os.path.exists(head_path):
         print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
