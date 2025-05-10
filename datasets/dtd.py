@@ -10,12 +10,8 @@ class DTD:
                  batch_size=32,
                  num_workers=16):
         # Data loading code
-        traindir = os.path.join(location, 'train')
-        valdir = os.path.join(location, 'val')
-
-        print(f"Train directory: {traindir}")
-        print(f"Validation directory: {valdir}")
-
+        traindir = os.path.join(location, 'dtd', 'train')
+        valdir = os.path.join(location, 'dtd', 'val')
 
         self.train_dataset = datasets.ImageFolder(
             traindir, transform=preprocess)
