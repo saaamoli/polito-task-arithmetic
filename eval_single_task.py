@@ -22,25 +22,26 @@ with open(hyperparams_path, "r") as f:
 
 def load_finetuned_model(args, dataset_name):
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
+    head_path = os.path.join(args.checkpoints_path, f"head_{dataset_name}Val.pt")  # ✅ fixed path
 
     if not os.path.exists(encoder_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
 
     encoder = torch.load(encoder_checkpoint_path).cuda()
 
-    # Load or Generate the Classification Head
-    head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
     if os.path.exists(head_path):
         print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
         head = torch.load(head_path).cuda()
     else:
         print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
         head = get_classification_head(args, dataset_name).cuda()
+        os.makedirs(os.path.dirname(head_path), exist_ok=True)
         head.save(head_path)
         print(f"✅ Generated and saved classification head at {head_path}")
 
     model = ImageClassifier(encoder, head).cuda()
     return model
+
 
 def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
