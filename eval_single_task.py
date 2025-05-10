@@ -148,11 +148,14 @@ def evaluate_and_save(args, dataset_name):
         print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
         return
 
-    # Set dataset path
+    # ✅ Save original root
+    original_data_location = args.data_location
+
+    # ✅ Set correct path for this dataset
     dataset_path = resolve_dataset_path(args, dataset_name)
     args.data_location = dataset_path
 
-   # Preprocessing pipeline
+    # === Preprocessing pipeline ===
     preprocess = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -160,29 +163,26 @@ def evaluate_and_save(args, dataset_name):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # Dataset-specific logic for val split handling
+    # === Determine val split handling ===
     use_val_split = dataset_name in ["MNIST", "GTSRB", "SVHN", "EuroSAT", "RESISC45"]
 
-    # === Load Train and Validation ===
     if use_val_split:
-        # Use "XYZVal" to split training into train/val
         val_dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
         train_loader = get_dataloader(val_dataset, is_train=True, args=args)
         val_loader = get_dataloader(val_dataset, is_train=False, args=args)
     else:
-        # Use class-defined splits for DTD only (train/val embedded in loader)
         base_dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
         train_loader = base_dataset.train_loader
-        val_loader = base_dataset.test_loader  # In DTD, test_loader == val/
-    
-    # === Load Test Set ===
+        val_loader = base_dataset.test_loader
+
+    # === Load test set ===
     test_dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
     test_loader = get_dataloader(test_dataset, is_train=False, args=args)
 
-    # === Load Fine-tuned Model ===
+    # === Load fine-tuned model ===
     model = load_finetuned_model(args, dataset_name)
 
-    # === Compute Accuracies ===
+    # === Compute accuracies ===
     train_acc = evaluate_model(model, train_loader)
     print(f"✅ Train Accuracy for {dataset_name}: {train_acc:.4f}")
 
@@ -192,12 +192,12 @@ def evaluate_and_save(args, dataset_name):
     test_acc = evaluate_model(model, test_loader)
     print(f"✅ Test Accuracy for {dataset_name}: {test_acc:.4f}")
 
-    # === Compute Fisher Information Log-Trace ===
+    # === Compute FIM log-trace ===
     criterion = torch.nn.CrossEntropyLoss()
     fim_log_trace = compute_fim_log_trace(model, train_loader, criterion, device=args.device)
     print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
 
-    # === Save Results ===
+    # === Save results ===
     results = {
         "dataset": dataset_name,
         "train_accuracy": train_acc,
@@ -206,6 +206,9 @@ def evaluate_and_save(args, dataset_name):
         "fim_log_trace": fim_log_trace
     }
     save_results(results, save_path)
+
+    # ✅ Restore original data location for the next dataset
+    args.data_location = original_data_location
 
 
 def main():
