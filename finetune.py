@@ -13,7 +13,6 @@ from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
-from torchvision import transforms
 
 
 def resolve_dataset_path(args, dataset_name):
@@ -38,27 +37,25 @@ def resolve_dataset_path(args, dataset_name):
 def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
     print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
 
-    # ✅ Backup and temporarily set data path
+    # ✅ Temporarily adjust dataset path
     original_data_location = args.data_location
-    base_dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = base_dataset_path
+    args.data_location = resolve_dataset_path(args, dataset_name)
 
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
         print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
-        args.data_location = original_data_location  # restore before return
+        args.data_location = original_data_location
         return
 
-    encoder = ImageEncoder(args).cuda()
+    encoder = ImageEncoder(args).to(args.device)
     preprocess = encoder.train_preprocess
-
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=args.data_location, batch_size=batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
     val_loader = get_dataloader(dataset, is_train=False, args=args)
 
-    head = get_classification_head(args, dataset_name).cuda()
-    model = ImageClassifier(encoder, head).cuda()
+    head = get_classification_head(args, dataset_name).to(args.device)
+    model = ImageClassifier(encoder, head).to(args.device)
 
     # Freeze the classification head
     for param in model.classification_head.parameters():
@@ -80,7 +77,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         epoch_loss = 0.0
         for batch in train_loader:
             data = maybe_dictionarize(batch)
-            inputs, labels = data["images"].cuda(), data["labels"].cuda()
+            inputs, labels = data["images"].to(args.device), data["labels"].to(args.device)
 
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -95,7 +92,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         with torch.no_grad():
             for batch in val_loader:
                 data = maybe_dictionarize(batch)
-                inputs, labels = data["images"].cuda(), data["labels"].cuda()
+                inputs, labels = data["images"].to(args.device), data["labels"].to(args.device)
                 outputs = model(inputs)
                 loss = criterion(outputs, labels)
                 val_loss += loss.item()
@@ -115,32 +112,35 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         })
 
     # Save model and results
-    save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     os.makedirs(args.save, exist_ok=True)
-    model.image_encoder.save(save_path)
-    print(f"✅ Fine-tuned model saved to {save_path}")
+    model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_finetuned.pt"))
+    print(f"✅ Fine-tuned model saved to {os.path.join(args.save, f'{dataset_name}_finetuned.pt')}")
 
     with open(log_path, "a") as log_file:
         log_file.write(json.dumps(results) + "\n")
 
-    # ✅ Restore the original path so next dataset isn't broken
+    # ✅ Restore original path
     args.data_location = original_data_location
-
 
 
 if __name__ == "__main__":
     args = parse_arguments()
-    args.save = "/kaggle/working/checkpoints_weight"  # New directory for weight checkpoints
+    args.save = "/kaggle/working/checkpoints_weight"
     args.data_location = "/kaggle/working/datasets"
 
-    # Load hyperparameters from hyperparams.json
+    # ✅ Reproducibility (optional)
+    if args.seed is not None:
+        torch.manual_seed(args.seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+    # Load hyperparameters
     hyperparams_path = os.path.join('/kaggle/working/polito-task-arithmetic', 'hyperparams.json')
     if not os.path.exists(hyperparams_path):
         raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
     
     with open(hyperparams_path, "r") as f:
         baseline_hyperparams = json.load(f)
-
 
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
     log_path = "/kaggle/working/weight_results.json"
