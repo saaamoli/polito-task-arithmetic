@@ -10,10 +10,8 @@ from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
 
-
 # Load hyperparameters from hyperparams.json
 hyperparams_path = '/kaggle/working/polito-task-arithmetic/hyperparams.json'
-
 if not os.path.exists(hyperparams_path):
     raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
 
@@ -22,7 +20,7 @@ with open(hyperparams_path, "r") as f:
 
 def load_finetuned_model(args, dataset_name):
     encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
-    head_path = os.path.join(args.checkpoints_path, f"head_{dataset_name}Val.pt")  # ✅ fixed path
+    head_path = os.path.join(args.checkpoints_path, f"head_{dataset_name}Val.pt")
 
     if not os.path.exists(encoder_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
@@ -39,28 +37,19 @@ def load_finetuned_model(args, dataset_name):
         head.save(head_path)
         print(f"✅ Generated and saved classification head at {head_path}")
 
-    model = ImageClassifier(encoder, head).cuda()
-    return model
-
+    return ImageClassifier(encoder, head).cuda()
 
 def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
-
-    if dataset_name_lower == "dtd":
-        return os.path.join(base_path)
-    elif dataset_name_lower == "eurosat":
-        return base_path
-    elif dataset_name_lower == "mnist":
+    if dataset_name_lower == "mnist":
         return os.path.join(base_path, "MNIST", "raw")
     elif dataset_name_lower == "gtsrb":
         return os.path.join(base_path, "gtsrb")
-    elif dataset_name_lower == "resisc45":
-        return base_path
     elif dataset_name_lower == "svhn":
         return os.path.join(base_path, "svhn")
     else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
+        return base_path
 
 def evaluate_model(model, dataloader):
     correct, total = 0, 0
@@ -78,18 +67,12 @@ def evaluate_model(model, dataloader):
             _, preds = torch.max(outputs, 1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
-
     return correct / total
 
 def compute_fim_log_trace(model, dataloader, criterion, device):
-    fim = {}
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            fim[name] = torch.zeros_like(param)
-
-    total_samples = 0
-    max_samples = 5000  # Increased sample size for better approximation
-    scaling_factor = 1e3  # Gradient scaling to stabilize small values
+    fim = {name: torch.zeros_like(param) for name, param in model.named_parameters() if param.requires_grad}
+    total_samples, max_samples = 0, 5000
+    scaling_factor = 1e3
     dataloader_iterator = iter(dataloader)
 
     print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
@@ -97,10 +80,9 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
         try:
             batch = next(dataloader_iterator)
         except StopIteration:
-            dataloader_iterator = iter(dataloader)  # Restart iterator if exhausted
+            dataloader_iterator = iter(dataloader)
             batch = next(dataloader_iterator)
 
-        # Handle batch types
         if isinstance(batch, dict):
             inputs, labels = batch['images'].to(device), batch['labels'].to(device)
         elif isinstance(batch, (list, tuple)):
@@ -109,31 +91,25 @@ def compute_fim_log_trace(model, dataloader, criterion, device):
             raise TypeError(f"Unexpected batch type: {type(batch)}")
 
         model.zero_grad()
-
         outputs = model(inputs)
         loss = criterion(outputs, labels)
 
         if not loss.requires_grad:
-            raise ValueError("Loss does not require gradients. Check the computation graph.")
+            raise ValueError("Loss does not require gradients.")
 
         loss.backward(retain_graph=True)
-
         for name, param in model.named_parameters():
             if param.requires_grad and param.grad is not None:
-                fim[name] += scaling_factor * param.grad.pow(2)  # Scale gradients to stabilize FIM computation
+                fim[name] += scaling_factor * param.grad.pow(2)
 
         total_samples += inputs.size(0)
         if total_samples >= max_samples:
             print(f"Processed {total_samples} samples for FIM computation.")
             break
 
-    fim_trace = sum(fim_value.sum().item() for fim_value in fim.values())
-    print(f"Raw FIM Trace Sum: {fim_trace}")
-
-    # Normalize and safeguard trace computation
-    normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)  # Avoid division by zero
+    fim_trace = sum(f.sum().item() for f in fim.values())
+    normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)
     fim_log_trace = torch.log(torch.tensor(normalized_trace))
-
     print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
     return fim_log_trace.item()
 
@@ -149,12 +125,10 @@ def evaluate_and_save(args, dataset_name):
         print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
         return
 
-    # Backup and set data location
     original_data_location = args.data_location
     dataset_path = resolve_dataset_path(args, dataset_name)
     args.data_location = dataset_path
 
-    # Preprocessing
     preprocess = transforms.Compose([
         transforms.Resize((224, 224)),
         transforms.Grayscale(num_output_channels=3) if dataset_name.lower() == "mnist" else transforms.Lambda(lambda x: x),
@@ -162,7 +136,6 @@ def evaluate_and_save(args, dataset_name):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
 
-    # Determine if 90/10 split is needed
     use_val_split = dataset_name in ["MNIST", "GTSRB", "SVHN", "EuroSAT", "RESISC45", "DTD"]
 
     if use_val_split:
@@ -174,24 +147,18 @@ def evaluate_and_save(args, dataset_name):
         train_loader = base_dataset.train_loader
         val_loader = base_dataset.test_loader
 
-    # Test loader
     test_dataset = get_dataset(dataset_name, preprocess, dataset_path, args.batch_size)
     test_loader = get_dataloader(test_dataset, is_train=False, args=args)
 
-    # Load model
     model = load_finetuned_model(args, dataset_name)
-
-    # Accuracy evaluation
     train_acc = evaluate_model(model, train_loader)
-    print(f"✅ Train Accuracy for {dataset_name}: {train_acc:.4f}")
-
     val_acc = evaluate_model(model, val_loader)
-    print(f"✅ Validation Accuracy for {dataset_name}: {val_acc:.4f}")
-
     test_acc = evaluate_model(model, test_loader)
+
+    print(f"✅ Train Accuracy for {dataset_name}: {train_acc:.4f}")
+    print(f"✅ Validation Accuracy for {dataset_name}: {val_acc:.4f}")
     print(f"✅ Test Accuracy for {dataset_name}: {test_acc:.4f}")
 
-    # === 🔁 Correct FIM: use full training set from "XYZ" ===
     fim_dataset = get_dataset(dataset_name, preprocess, resolve_dataset_path(args, dataset_name), args.batch_size)
     fim_loader = get_dataloader(fim_dataset, is_train=True, args=args)
 
@@ -199,7 +166,6 @@ def evaluate_and_save(args, dataset_name):
     fim_log_trace = compute_fim_log_trace(model, fim_loader, criterion, device=args.device)
     print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
 
-    # Save results
     results = {
         "dataset": dataset_name,
         "train_accuracy": train_acc,
@@ -208,31 +174,28 @@ def evaluate_and_save(args, dataset_name):
         "fim_log_trace": fim_log_trace
     }
     save_results(results, save_path)
-
-    # Restore data path
     args.data_location = original_data_location
-
 
 def main():
     args = parse_arguments()
 
-    # Define necessary paths
-    args.checkpoints_path = "/kaggle/working/checkpoints_batchsize"
-    args.results_dir = "/kaggle/working/results_batchsize"
+    # 🔁 Dynamic path setup based on --exp_name
+    if args.save is None:
+        if args.exp_name is not None:
+            args.save = f"/kaggle/working/checkpoints_{args.exp_name}"
+        else:
+            args.save = "/kaggle/working/checkpoints_default"
+
+    args.checkpoints_path = args.save
+    args.results_dir = args.save.replace("checkpoints", "results")
     args.data_location = "/kaggle/working/datasets"
-    args.save = "/kaggle/working/checkpoints_batchsize"
 
-    # List of datasets to evaluate
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
-
-    # Evaluate and save results for each dataset
     for dataset_name in datasets:
         print(f"\n--- Evaluating {dataset_name} ---")
-        # Set batch size dynamically for the current dataset
         args.batch_size = baseline_hyperparams[dataset_name]["batch_size"]
         print(f"Using batch size {args.batch_size} for {dataset_name}")
         evaluate_and_save(args, dataset_name)
-
 
 if __name__ == "__main__":
     main()
