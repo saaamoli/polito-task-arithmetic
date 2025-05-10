@@ -164,7 +164,7 @@ def evaluate_and_save(args, dataset_name):
     ])
 
     # === Determine val split handling ===
-    use_val_split = dataset_name in ["MNIST", "GTSRB", "SVHN", "EuroSAT", "RESISC45"]
+    use_val_split = dataset_name in ["MNIST", "GTSRB", "SVHN", "EuroSAT", "RESISC45", "DTD"]
 
     if use_val_split:
         val_dataset = get_dataset(f"{dataset_name}Val", preprocess, dataset_path, args.batch_size)
