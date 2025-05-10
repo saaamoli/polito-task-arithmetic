@@ -38,9 +38,15 @@ def resolve_dataset_path(args, dataset_name):
 def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
     print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
 
+    # ✅ Backup and temporarily set data path
+    original_data_location = args.data_location
+    base_dataset_path = resolve_dataset_path(args, dataset_name)
+    args.data_location = base_dataset_path
+
     checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     if os.path.exists(checkpoint_path):
         print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
+        args.data_location = original_data_location  # restore before return
         return
 
     preprocess = transforms.Compose([
@@ -49,9 +55,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-
-    base_dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = base_dataset_path
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=args.data_location, batch_size=batch_size, num_workers=2)
     train_loader = get_dataloader(dataset, is_train=True, args=args)
@@ -68,7 +71,13 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
 
-    results = {"dataset": dataset_name, "lr": learning_rate, "batch_size": batch_size, "weight_decay": weight_decay, "epochs": []}
+    results = {
+        "dataset": dataset_name,
+        "lr": learning_rate,
+        "batch_size": batch_size,
+        "weight_decay": weight_decay,
+        "epochs": []
+    }
 
     for epoch in range(num_epochs):
         model.train()
@@ -102,16 +111,25 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         val_accuracy = correct / total
 
         print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
-        results["epochs"].append({"epoch": epoch+1, "train_loss": epoch_loss / len(train_loader), "val_loss": avg_val_loss, "val_acc": val_accuracy})
+        results["epochs"].append({
+            "epoch": epoch+1,
+            "train_loss": epoch_loss / len(train_loader),
+            "val_loss": avg_val_loss,
+            "val_acc": val_accuracy
+        })
 
+    # Save model and results
     save_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(save_path)
     print(f"✅ Fine-tuned model saved to {save_path}")
 
-    # Save results to JSON
     with open(log_path, "a") as log_file:
         log_file.write(json.dumps(results) + "\n")
+
+    # ✅ Restore the original path so next dataset isn't broken
+    args.data_location = original_data_location
+
 
 
 if __name__ == "__main__":
