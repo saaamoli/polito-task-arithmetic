@@ -35,7 +35,14 @@ def load_finetuned_model(args, dataset_name):
         head = torch.load(head_path).cuda()
     else:
         print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
+        # Temporarily reset dataset root before generating head
+        original_data_location = args.data_location
+        args.data_location = "/kaggle/working/datasets"  # global root, not dataset-specific
+        
         head = get_classification_head(args, dataset_name).cuda()
+        
+        args.data_location = original_data_location  # restore original path
+
         head.save(head_path)
         print(f"✅ Generated and saved classification head at {head_path}")
 
