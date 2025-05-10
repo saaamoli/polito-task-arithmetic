@@ -28,35 +28,26 @@ def load_finetuned_model(args, dataset_name):
 
     encoder = torch.load(encoder_checkpoint_path).cuda()
 
-    # Where the head will be saved
+    # Load or Generate the Classification Head
     head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
     if os.path.exists(head_path):
         print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
         head = torch.load(head_path).cuda()
     else:
         print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
-
-        # ✅ Force dataset root for head generation
-        from copy import deepcopy
-        args_for_head = deepcopy(args)
-        args_for_head.data_location = "/kaggle/working/datasets"
-
-        # Explicitly use DTDVal etc.
-        head = get_classification_head(args_for_head, f"{dataset_name}Val").cuda()
-
+        head = get_classification_head(args, dataset_name).cuda()
         head.save(head_path)
         print(f"✅ Generated and saved classification head at {head_path}")
 
-    return ImageClassifier(encoder, head).cuda()
-
-
+    model = ImageClassifier(encoder, head).cuda()
+    return model
 
 def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
 
-    if dataset_name_lower in ["dtd", "dtdval"]:
-        return os.path.join(base_path, "dtd")  # ✅ Correct for both
+    if dataset_name_lower == "dtd":
+        return os.path.join(base_path, "dtd")
     elif dataset_name_lower == "eurosat":
         return base_path
     elif dataset_name_lower == "mnist":
@@ -69,7 +60,6 @@ def resolve_dataset_path(args, dataset_name):
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
-
 
 def evaluate_model(model, dataloader):
     correct, total = 0, 0
@@ -157,13 +147,6 @@ def evaluate_and_save(args, dataset_name):
     if os.path.exists(save_path):
         print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
         return
-
-    # Backup original data_location
-    original_data_location = args.data_location
-
-    # Resolve current dataset path and set it temporarily
-    dataset_path = resolve_dataset_path(args, dataset_name)
-    args.data_location = dataset_path  # TEMPORARILY SET for this dataset
 
     # Set dataset path
     dataset_path = resolve_dataset_path(args, dataset_name)
