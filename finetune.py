@@ -125,7 +125,13 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 
 if __name__ == "__main__":
     args = parse_arguments()
-    args.save = "/kaggle/working/checkpoints_weight"
+    # Set save path dynamically if not provided
+    if args.save is None:
+    if args.exp_name is not None:
+        args.save = f"/kaggle/working/checkpoints_{args.exp_name}"
+    else:
+        args.save = "/kaggle/working/checkpoints_default"
+
     args.data_location = "/kaggle/working/datasets"
 
     # ✅ Reproducibility (optional)
