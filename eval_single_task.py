@@ -9,6 +9,8 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
+from utils import train_diag_fim_logtr
+
 
 # Load hyperparameters from hyperparams.json
 hyperparams_path = '/kaggle/working/polito-task-arithmetic/hyperparams.json'
@@ -69,49 +71,6 @@ def evaluate_model(model, dataloader):
             total += labels.size(0)
     return correct / total
 
-def compute_fim_log_trace(model, dataloader, criterion, device):
-    fim = {name: torch.zeros_like(param) for name, param in model.named_parameters() if param.requires_grad}
-    total_samples, max_samples = 0, 5000
-    scaling_factor = 1e3
-    dataloader_iterator = iter(dataloader)
-
-    print(f"Starting FIM computation with dataset size: {len(dataloader.dataset)}")
-    while total_samples < max_samples:
-        try:
-            batch = next(dataloader_iterator)
-        except StopIteration:
-            dataloader_iterator = iter(dataloader)
-            batch = next(dataloader_iterator)
-
-        if isinstance(batch, dict):
-            inputs, labels = batch['images'].to(device), batch['labels'].to(device)
-        elif isinstance(batch, (list, tuple)):
-            inputs, labels = batch[0].to(device), batch[1].to(device)
-        else:
-            raise TypeError(f"Unexpected batch type: {type(batch)}")
-
-        model.zero_grad()
-        outputs = model(inputs)
-        loss = criterion(outputs, labels)
-
-        if not loss.requires_grad:
-            raise ValueError("Loss does not require gradients.")
-
-        loss.backward(retain_graph=True)
-        for name, param in model.named_parameters():
-            if param.requires_grad and param.grad is not None:
-                fim[name] += scaling_factor * param.grad.pow(2)
-
-        total_samples += inputs.size(0)
-        if total_samples >= max_samples:
-            print(f"Processed {total_samples} samples for FIM computation.")
-            break
-
-    fim_trace = sum(f.sum().item() for f in fim.values())
-    normalized_trace = max(fim_trace / (total_samples or 1), 1e-6)
-    fim_log_trace = torch.log(torch.tensor(normalized_trace))
-    print(f"Normalized FIM Trace: {normalized_trace}, Log Trace: {fim_log_trace.item()}")
-    return fim_log_trace.item()
 
 def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -163,7 +122,7 @@ def evaluate_and_save(args, dataset_name):
     fim_loader = get_dataloader(fim_dataset, is_train=True, args=args)
 
     criterion = torch.nn.CrossEntropyLoss()
-    fim_log_trace = compute_fim_log_trace(model, fim_loader, criterion, device=args.device)
+    fim_log_trace = train_diag_fim_logtr(args, model, dataset_name)
     print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
 
     results = {
