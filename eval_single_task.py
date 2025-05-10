@@ -46,8 +46,8 @@ def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
 
-    if dataset_name_lower == "dtd":
-        return os.path.join(base_path, "dtd")
+    if dataset_name_lower in ["dtd", "dtdval"]:
+        return os.path.join(base_path, "dtd")  # ✅ Correct for both
     elif dataset_name_lower == "eurosat":
         return base_path
     elif dataset_name_lower == "mnist":
@@ -60,6 +60,7 @@ def resolve_dataset_path(args, dataset_name):
         return os.path.join(base_path, "svhn")
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
+
 
 def evaluate_model(model, dataloader):
     correct, total = 0, 0
