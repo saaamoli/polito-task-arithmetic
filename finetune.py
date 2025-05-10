@@ -64,13 +64,6 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
 
-    results = {
-        "dataset": dataset_name,
-        "lr": learning_rate,
-        "batch_size": batch_size,
-        "weight_decay": weight_decay,
-        "epochs": []
-    }
 
     for epoch in range(num_epochs):
         model.train()
@@ -104,20 +97,11 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         val_accuracy = correct / total
 
         print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
-        results["epochs"].append({
-            "epoch": epoch+1,
-            "train_loss": epoch_loss / len(train_loader),
-            "val_loss": avg_val_loss,
-            "val_acc": val_accuracy
-        })
 
-    # Save model and results
+    # Save model 
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_finetuned.pt"))
     print(f"✅ Fine-tuned model saved to {os.path.join(args.save, f'{dataset_name}_finetuned.pt')}")
-
-    with open(log_path, "a") as log_file:
-        log_file.write(json.dumps(results) + "\n")
 
     # ✅ Restore original path
     args.data_location = original_data_location
@@ -127,10 +111,10 @@ if __name__ == "__main__":
     args = parse_arguments()
     # Set save path dynamically if not provided
     if args.save is None:
-    if args.exp_name is not None:
-        args.save = f"/kaggle/working/checkpoints_{args.exp_name}"
-    else:
-        args.save = "/kaggle/working/checkpoints_default"
+        if args.exp_name is not None:
+            args.save = f"/kaggle/working/checkpoints_{args.exp_name}"
+        else:
+            args.save = "/kaggle/working/checkpoints_default"
 
     args.data_location = "/kaggle/working/datasets"
 
