@@ -58,8 +58,8 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     model = ImageClassifier(encoder, head).to(args.device)
 
     # Freeze the classification head
-    for param in model.classification_head.parameters():
-        param.requires_grad = False
+    model.freeze_head()
+
 
     optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
