@@ -28,24 +28,16 @@ def load_finetuned_model(args, dataset_name):
 
     encoder = torch.load(encoder_checkpoint_path).cuda()
 
-    # Classification head logic (dataset-specific naming)
+    # Load or Generate the Classification Head
     head_path = os.path.join(args.results_dir, f"head_{dataset_name}Val.pt")
     if os.path.exists(head_path):
         print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
         head = torch.load(head_path).cuda()
     else:
         print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
-
-        # ✅ Pass "XYZVal" explicitly for datasets using 90/10 splitting logic
-        head_dataset_name = f"{dataset_name}Val" if dataset_name in ["MNIST", "GTSRB", "SVHN", "EuroSAT", "RESISC45", "DTD"] else dataset_name
-        head = get_classification_head(args, head_dataset_name).cuda()
-
+        head = get_classification_head(args, dataset_name).cuda()
         head.save(head_path)
         print(f"✅ Generated and saved classification head at {head_path}")
-
-    model = ImageClassifier(encoder, head).cuda()
-    return model
-
 
     model = ImageClassifier(encoder, head).cuda()
     return model
@@ -156,9 +148,16 @@ def evaluate_and_save(args, dataset_name):
         print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
         return
 
+    # Backup original data_location
+    original_data_location = args.data_location
+
+    # Resolve current dataset path and set it temporarily
+    dataset_path = resolve_dataset_path(args, dataset_name)
+    args.data_location = dataset_path  # TEMPORARILY SET for this dataset
+
     # Set dataset path
     dataset_path = resolve_dataset_path(args, dataset_name)
-    # args.data_location = dataset_path
+    args.data_location = dataset_path
 
    # Preprocessing pipeline
     preprocess = transforms.Compose([
