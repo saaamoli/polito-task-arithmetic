@@ -14,7 +14,6 @@ from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 
-
 def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
     dataset_name_lower = dataset_name.lower()
@@ -33,7 +32,6 @@ def resolve_dataset_path(args, dataset_name):
     else:
         raise ValueError(f"Unknown dataset: {dataset_name}")
 
-
 def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_size, weight_decay, log_path):
     print(f"\n==== Fine-tuning on {dataset_name} with LR={learning_rate}, Batch Size={batch_size}, WD={weight_decay} ====\n")
 
@@ -48,6 +46,15 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         return
 
     encoder = ImageEncoder(args).to(args.device)
+
+    # ✅ Save pretrained encoder once
+    pretrained_path = os.path.join(args.save, "pretrained.pt")
+    if not os.path.exists(pretrained_path):
+        print(f"✅ Saving pretrained encoder to {pretrained_path}")
+        encoder.save(pretrained_path)
+    else:
+        print(f"ℹ️ Pretrained encoder already exists at {pretrained_path}")
+
     preprocess = encoder.train_preprocess
 
     dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=args.data_location, batch_size=batch_size, num_workers=2)
@@ -60,10 +67,8 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     # Freeze the classification head
     model.freeze_head()
 
-
     optimizer = torch.optim.SGD(model.image_encoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     criterion = torch.nn.CrossEntropyLoss()
-
 
     for epoch in range(num_epochs):
         model.train()
@@ -98,7 +103,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 
         print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
 
-    # Save model 
+    # Save fine-tuned model
     os.makedirs(args.save, exist_ok=True)
     model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_finetuned.pt"))
     print(f"✅ Fine-tuned model saved to {os.path.join(args.save, f'{dataset_name}_finetuned.pt')}")
@@ -106,10 +111,9 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     # ✅ Restore original path
     args.data_location = original_data_location
 
-
 if __name__ == "__main__":
     args = parse_arguments()
-    # Set save path dynamically if not provided
+
     if args.save is None:
         if args.exp_name is not None:
             args.save = f"/kaggle/working/checkpoints_{args.exp_name}"
@@ -118,13 +122,11 @@ if __name__ == "__main__":
 
     args.data_location = "/kaggle/working/datasets"
 
-    # ✅ Reproducibility (optional)
     if args.seed is not None:
         torch.manual_seed(args.seed)
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    # Load hyperparameters
     hyperparams_path = os.path.join('/kaggle/working/polito-task-arithmetic', 'hyperparams.json')
     if not os.path.exists(hyperparams_path):
         raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
