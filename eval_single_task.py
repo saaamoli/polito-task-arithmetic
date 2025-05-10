@@ -210,6 +210,10 @@ def evaluate_and_save(args, dataset_name):
     # ✅ Restore original data location for the next dataset
     args.data_location = original_data_location
 
+    print(f"Val samples: {len(val_loader.dataset)}")
+    print(f"Test samples: {len(test_loader.dataset)}")
+
+
 
 def main():
     args = parse_arguments()
