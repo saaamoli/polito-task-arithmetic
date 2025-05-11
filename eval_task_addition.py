@@ -61,6 +61,7 @@ def main():
 
     best_alpha, best_score = 0, 0
     for alpha in np.arange(0.0, 1.05, 0.05):
+        print(f"🔁 Calculating alpha = {alpha:.2f}")
         combined_vector = sum((tv * alpha for tv in task_vectors))
         blended_encoder = combined_vector.apply_to(
             os.path.join(args.checkpoints_path, "pretrained.pt"), scaling_coef=1.0
