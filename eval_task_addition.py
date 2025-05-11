@@ -138,5 +138,65 @@ def main():
         json.dump(results, f, indent=4)
     print(f"✅ Task addition results saved to {args.results_dir}/task_addition_results.json")
 
+
+    # ✅ Evaluate each individual scaled τₜ: f(θ₀ + α⋅τₜ)
+    scaled_results = {
+        "alpha": best_alpha,
+        "Single-task Acc. (Train)": [],
+        "Single-task Acc. (Test)": [],
+        "logTr[F̂·] (Train)": []
+    }
+
+    print("\n🔬 Evaluating each task with its own scaled τₜ (after scaling)...")
+    for i, dataset in enumerate(datasets):
+        print(f"📌 Evaluating scaled τₜ for {dataset}...")
+
+        # Apply alpha-scaled single task vector
+        encoder = (task_vectors[i] * best_alpha).apply_to(
+            os.path.join(args.checkpoints_path, "pretrained.pt"), scaling_coef=1.0
+        ).cuda()
+
+        # Common preprocessing
+        path = resolve_dataset_path(args, dataset)
+        preprocess = transforms.Compose([
+            transforms.Resize((224, 224)),
+            transforms.Grayscale(3) if dataset.lower() == "mnist" else transforms.Lambda(lambda x: x),
+            transforms.ToTensor(),
+            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+        ])
+
+        try:
+            # Train Evaluation
+            train_ds = get_dataset(f"{dataset}Val", preprocess, path, args.batch_size)
+            train_loader = train_ds.train_loader
+            head = get_classification_head(args, dataset).cuda()
+            model = ImageClassifier(encoder, head).cuda()
+
+            train_acc = evaluate_model(model, train_loader)
+            fim_trace = train_diag_fim_logtr(args, model, dataset)
+
+            # Test Evaluation
+            test_ds = get_dataset(dataset, preprocess, path, args.batch_size)
+            test_loader = test_ds.test_loader
+            test_acc = evaluate_model(model, test_loader)
+
+            # Save required metrics only
+            scaled_results["Single-task Acc. (Train)"].append(train_acc)
+            scaled_results["Single-task Acc. (Test)"].append(test_acc)
+            scaled_results["logTr[F̂·] (Train)"].append(fim_trace)
+
+        except Exception as e:
+            print(f"⚠️ Error evaluating {dataset} after scaling: {e}")
+            for key in scaled_results:
+                if key != "alpha":
+                    scaled_results[key].append(0.0)
+
+    # ✅ Save scaled results
+    scaled_path = os.path.join(args.results_dir, "scaled_model_results.json")
+    with open(scaled_path, "w") as f:
+        json.dump(scaled_results, f, indent=4)
+    print(f"✅ Scaled model results saved to {scaled_path}")
+
+
 if __name__ == "__main__":
     main()
