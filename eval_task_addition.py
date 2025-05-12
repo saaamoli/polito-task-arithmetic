@@ -38,6 +38,15 @@ def compute_average_normalized_accuracy(val_accuracies, single_task_accuracies):
     return np.mean([v / s if s != 0 else 0 for v, s in zip(val_accuracies, single_task_accuracies)])
 
 def main():
+
+    # Resume support for alpha sweep
+    progress_path = os.path.join(args.results_dir, "alpha_search_progress.json")
+    if os.path.exists(progress_path):
+        with open(progress_path, "r") as f:
+            alpha_results = json.load(f)
+    else:
+        alpha_results = {}
+
     args = parse_arguments()
     args.save = args.save or f"/kaggle/working/checkpoints_{args.exp_name or 'default'}"
     args.checkpoints_path = args.save
@@ -59,16 +68,19 @@ def main():
         single_task_accuracies.append(res["test_accuracy"])
         train_accuracies.append(res["train_accuracy"])
 
-    best_alpha, best_score = 0, 0
     for alpha in np.arange(0.0, 1.05, 0.05):
-        print(f"🔁 Calculating alpha = {alpha:.2f}")
+        alpha_str = f"{alpha:.2f}"
+        if alpha_str in alpha_results:
+            print(f"⏩ Skipping alpha = {alpha_str}, already computed.")
+            continue
+    
+        print(f"🔁 Calculating alpha = {alpha_str}")
         combined_vector = sum((tv * alpha for tv in task_vectors))
         blended_encoder = combined_vector.apply_to(
             os.path.join(args.checkpoints_path, "pretrained.pt"), scaling_coef=1.0
-        )
-        blended_encoder = blended_encoder.cuda()
+        ).cuda()
         val_accuracies = []
-
+    
         for dataset in datasets:
             try:
                 path = resolve_dataset_path(args, dataset)
@@ -87,13 +99,22 @@ def main():
             except Exception as e:
                 print(f"⚠️ Skipping {dataset} during alpha search due to error: {e}")
                 val_accuracies.append(0.0)
-
+    
         avg_score = compute_average_normalized_accuracy(val_accuracies, single_task_accuracies)
-        if avg_score > best_score:
-            best_alpha = alpha
-            best_score = avg_score
+    
+        # Store progress
+        alpha_results[alpha_str] = {
+            "val_accuracies": val_accuracies,
+            "avg_normalized_score": avg_score
+        }
+        with open(progress_path, "w") as f:
+            json.dump(alpha_results, f, indent=4)
 
+  
+    best_alpha = max(alpha_results.items(), key=lambda x: x[1]["avg_normalized_score"])[0]
+    best_alpha = float(best_alpha)
     print(f"🏆 Best alpha: {best_alpha:.2f}")
+
 
     # Final evaluation with best alpha
     combined_vector = sum((tv * best_alpha for tv in task_vectors))
