@@ -39,14 +39,6 @@ def compute_average_normalized_accuracy(val_accuracies, single_task_accuracies):
 
 def main():
 
-    # Resume support for alpha sweep
-    progress_path = os.path.join(args.results_dir, "alpha_search_progress.json")
-    if os.path.exists(progress_path):
-        with open(progress_path, "r") as f:
-            alpha_results = json.load(f)
-    else:
-        alpha_results = {}
-
     args = parse_arguments()
     args.save = args.save or f"/kaggle/working/checkpoints_{args.exp_name or 'default'}"
     args.checkpoints_path = args.save
@@ -68,6 +60,15 @@ def main():
         single_task_accuracies.append(res["test_accuracy"])
         train_accuracies.append(res["train_accuracy"])
 
+    # Resume support for alpha sweep
+    progress_path = os.path.join(args.results_dir, "alpha_search_progress.json")
+    if os.path.exists(progress_path):
+        with open(progress_path, "r") as f:
+            alpha_results = json.load(f)
+    else:
+        alpha_results = {}
+
+    
     for alpha in np.arange(0.0, 1.05, 0.05):
         alpha_str = f"{alpha:.2f}"
         if alpha_str in alpha_results:
