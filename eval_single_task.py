@@ -33,7 +33,8 @@ def load_finetuned_model(args, dataset_name):
 
     if os.path.exists(head_path):
         print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
-        head = torch.load(head_path).cuda()
+        head = torch.load(head_path, map_location="cuda", weights_only=False).cuda()
+
     else:
         print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
         head = get_classification_head(args, dataset_name).cuda()
