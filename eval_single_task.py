@@ -29,13 +29,13 @@ def load_finetuned_model(args, dataset_name):
     if not os.path.exists(encoder_checkpoint_path):
         raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
 
-    encoder = torch.load(encoder_checkpoint_path, map_location="cuda", weights_only=False)
+    encoder = torch.load(encoder_checkpoint_path, map_location="cuda")
 
 
 
     if os.path.exists(head_path):
         print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
-        head = torch.load(head_path, map_location="cuda", weights_only=False).cuda()
+        head = torch.load(head_path, map_location="cuda").cuda()
 
     else:
         print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
