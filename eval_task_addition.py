@@ -40,10 +40,18 @@ def compute_average_normalized_accuracy(val_accuracies, single_task_accuracies):
 def main():
 
     args = parse_arguments()
-    args.save = args.save or f"/kaggle/working/checkpoints_{args.exp_name or 'default'}"
+    # 🌍 Portable path setup
+    project_root = os.path.abspath(args.data_location)
+    args.data_location = os.path.join(project_root, "datasets")
+    
+    if args.save is None:
+        if args.exp_name:
+            args.save = os.path.join(project_root, f"checkpoints_{args.exp_name}")
+        else:
+            args.save = os.path.join(project_root, "checkpoints_default")
+    
     args.checkpoints_path = args.save
     args.results_dir = args.save.replace("checkpoints", "results")
-    args.data_location = "/kaggle/working/datasets"
     os.makedirs(args.results_dir, exist_ok=True)
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
