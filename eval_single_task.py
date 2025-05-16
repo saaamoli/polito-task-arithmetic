@@ -13,7 +13,9 @@ from utils import train_diag_fim_logtr
 
 
 # Load hyperparameters from hyperparams.json
-hyperparams_path = '/kaggle/working/polito-task-arithmetic/hyperparams.json'
+script_dir = os.path.abspath(os.path.dirname(__file__))
+hyperparams_path = os.path.join(script_dir, "hyperparams.json")
+
 if not os.path.exists(hyperparams_path):
     raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
 
