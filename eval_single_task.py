@@ -140,17 +140,21 @@ def evaluate_and_save(args, dataset_name):
 
 def main():
     args = parse_arguments()
-
-    # 🔁 Dynamic path setup based on --exp_name
+    
+    # 🌐 Portable path configuration
+    project_root = os.path.abspath(args.data_location)
+    args.data_location = os.path.join(project_root, "datasets")
+    
     if args.save is None:
         if args.exp_name is not None:
-            args.save = f"/kaggle/working/checkpoints_{args.exp_name}"
+            args.save = os.path.join(project_root, f"checkpoints_{args.exp_name}")
         else:
-            args.save = "/kaggle/working/checkpoints_default"
-
+            args.save = os.path.join(project_root, "checkpoints_default")
+    
     args.checkpoints_path = args.save
     args.results_dir = args.save.replace("checkpoints", "results")
-    args.data_location = "/kaggle/working/datasets"
+    os.makedirs(args.results_dir, exist_ok=True)
+
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
     for dataset_name in datasets:
