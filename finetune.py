@@ -5,8 +5,9 @@ import sys
 import json
 
 # Add project root to Python path
-sys.path.append('/kaggle/working/polito-task-arithmetic')
-print("Python Path:", sys.path)
+project_root = os.path.abspath(os.path.dirname(__file__))
+if project_root not in sys.path:
+    sys.path.append(project_root)
 
 from datasets.common import get_dataloader, maybe_dictionarize
 from datasets.registry import get_dataset
@@ -133,7 +134,7 @@ if __name__ == "__main__":
         torch.backends.cudnn.deterministic = True
         torch.backends.cudnn.benchmark = False
 
-    hyperparams_path = os.path.join('/kaggle/working/polito-task-arithmetic', 'hyperparams.json')
+    hyperparams_path = os.path.join(os.path.dirname(__file__), "hyperparams.json")
     if not os.path.exists(hyperparams_path):
         raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
     
@@ -141,7 +142,7 @@ if __name__ == "__main__":
         baseline_hyperparams = json.load(f)
 
     dataset_epochs = {"DTD": 76, "EuroSAT": 12, "GTSRB": 11, "MNIST": 5, "RESISC45": 15, "SVHN": 4}
-    log_path = "/kaggle/working/weight_results.json"
+    log_path = os.path.join(args.results_dir, "weight_results.json")
 
     for dataset_name, num_epochs in dataset_epochs.items():
         hyperparams = baseline_hyperparams[dataset_name]
