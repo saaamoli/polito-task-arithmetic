@@ -114,13 +114,19 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 if __name__ == "__main__":
     args = parse_arguments()
 
+    # 🌍 Portable path handling using --data-location as project root
+    project_root = os.path.abspath(args.data_location)
+    args.data_location = os.path.join(project_root, "datasets")
+    
     if args.save is None:
-        if args.exp_name is not None:
-            args.save = f"/kaggle/working/checkpoints_{args.exp_name}"
+        if args.exp_name:
+            args.save = os.path.join(project_root, f"checkpoints_{args.exp_name}")
         else:
-            args.save = "/kaggle/working/checkpoints_default"
-
-    args.data_location = "/kaggle/working/datasets"
+            args.save = os.path.join(project_root, "checkpoints_default")
+    
+    args.checkpoints_path = args.save
+    args.results_dir = args.save.replace("checkpoints", "results")
+    os.makedirs(args.results_dir, exist_ok=True)
 
     if args.seed is not None:
         torch.manual_seed(args.seed)
