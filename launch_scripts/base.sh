@@ -29,16 +29,16 @@ echo "📁 Checkpoints will be saved to: $SAVE_PATH"
 echo "📂 Datasets should be in: $DATA_PATH"
 
 # 1) Run fine-tuning
-python finetune.py \
+python polito-task-arithmetic/finetune.py \
   --data-location=$PROJECT_ROOT \
   --exp_name $EXP_NAME
 
 # 2) Evaluate single-task models
-python eval_single_task.py \
+python polito-task-arithmetic/eval_single_task.py \
   --data-location=$PROJECT_ROOT \
   --exp_name $EXP_NAME
 
 # 3) Run task addition
-python eval_task_addition.py \
+python polito-task-arithmetic/eval_task_addition.py \
   --data-location=$PROJECT_ROOT \
   --exp_name $EXP_NAME
