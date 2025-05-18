@@ -114,22 +114,23 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
 
         # ✅ Save best validation model
-        if epoch == 0 or args.finetune_mode in ("valacc", "both") and val_accuracy > best_val_acc:
+        if args.finetune_mode in ("valacc", "both") and (epoch == 0 or val_accuracy > best_val_acc):
             best_val_acc = val_accuracy
             model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_bestvalacc.pt"))
             print("💾 Saved best validation accuracy checkpoint.")
-
-        # ✅ Save best FIM log-trace model
-        try:
-            fim_trace = train_diag_fim_logtr(args, model, dataset_name)
-            print(f"📊 logTr[FIM]: {fim_trace:.4f}")
-            if epoch == 0 or args.finetune_mode in ("fim", "both") and fim_trace > best_fim_score:
-                best_fim_score = fim_trace
-                model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_bestfim.pt"))
-                print("💾 Saved best FIM trace checkpoint.")
-        except Exception as e:
-            print(f"⚠️ Could not compute FIM for {dataset_name} epoch {epoch+1}: {e}")
         
+        # ✅ Save best FIM log-trace model
+        if args.finetune_mode in ("fim", "both"):
+            try:
+                fim_trace = train_diag_fim_logtr(args, model, dataset_name)
+                print(f"📊 logTr[FIM]: {fim_trace:.4f}")
+                if epoch == 0 or fim_trace > best_fim_score:
+                    best_fim_score = fim_trace
+                    model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_bestfim.pt"))
+                    print("💾 Saved best FIM trace checkpoint.")
+            except Exception as e:
+                print(f"⚠️ Could not compute FIM for {dataset_name} epoch {epoch+1}: {e}")
+
 
     # ✅ Save final model
     os.makedirs(args.save, exist_ok=True)
