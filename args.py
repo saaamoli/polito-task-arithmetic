@@ -131,6 +131,13 @@ def parse_arguments():
         default="last",
         help="Which checkpoint to use during evaluation: best validation accuracy, best FIM trace, or last epoch."
     )
+    parser.add_argument(
+        "--finetune-mode",
+        choices=["valacc", "fim", "both"],
+        default="both",
+        help="Which metric to track and checkpoint: best validation accuracy, best FIM trace, or both."
+    )
+
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
