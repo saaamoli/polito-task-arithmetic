@@ -52,9 +52,10 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs):
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 
-    dataset = get_dataset(f"{dataset_name}Val", preprocess, path, args.batch_size)
-    train_loader = dataset.train_loader
-    val_loader = dataset.val_loader
+    dataset = get_dataset(f"{dataset_name}Val", preprocess=preprocess, location=path, batch_size=args.batch_size, num_workers=2)
+    train_loader = get_dataloader(dataset, is_train=True, args=args)
+    val_loader = get_dataloader(dataset, is_train=False, args=args)
+
 
     encoder = ImageEncoder(args).cuda()
     head = get_classification_head(args, dataset_name).cuda()
