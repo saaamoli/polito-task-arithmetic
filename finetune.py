@@ -114,7 +114,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         print(f"Epoch {epoch+1}/{num_epochs}: Train Loss = {epoch_loss/len(train_loader):.4f}, Val Loss = {avg_val_loss:.4f}, Val Acc = {val_accuracy:.4f}")
 
         # ✅ Save best validation model
-        if epoch == 0 or val_accuracy > best_val_acc:
+        if epoch == 0 or args.finetune_mode in ("valacc", "both") and val_accuracy > best_val_acc:
             best_val_acc = val_accuracy
             model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_bestvalacc.pt"))
             print("💾 Saved best validation accuracy checkpoint.")
@@ -123,7 +123,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
         try:
             fim_trace = train_diag_fim_logtr(args, model, dataset_name)
             print(f"📊 logTr[FIM]: {fim_trace:.4f}")
-            if epoch == 0 or fim_trace > best_fim_score:
+            if epoch == 0 or args.finetune_mode in ("fim", "both") and fim_trace > best_fim_score:
                 best_fim_score = fim_trace
                 model.image_encoder.save(os.path.join(args.save, f"{dataset_name}_bestfim.pt"))
                 print("💾 Saved best FIM trace checkpoint.")
