@@ -129,6 +129,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
                 print("💾 Saved best FIM trace checkpoint.")
         except Exception as e:
             print(f"⚠️ Could not compute FIM for {dataset_name} epoch {epoch+1}: {e}")
+        
 
     # ✅ Save final model
     os.makedirs(args.save, exist_ok=True)
@@ -150,6 +151,15 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
 
     # ✅ Restore original path
     args.data_location = original_data_location
+    # Save "I finished this dataset" signal
+    with open(os.path.join(args.results_dir, f"finetune_complete_{dataset_name}.txt"), "w") as f:
+        f.write("done")
+
+    # Save "I finished this dataset" signal
+    with open(os.path.join(args.results_dir, f"finetune_complete_{dataset_name}.txt"), "w") as f:
+        f.write("done")
+
+
 
 if __name__ == "__main__":
     args = parse_arguments()
