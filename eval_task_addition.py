@@ -27,7 +27,8 @@ def evaluate_model(model, dataloader):
     model.eval()
     with torch.no_grad():
         for batch in dataloader:
-            x, y = batch[0].cuda(), batch[1].cuda()
+            batch = batch if isinstance(batch, dict) else {'images': batch[0], 'labels': batch[1]}
+            x, y = batch['images'].cuda(), batch['labels'].cuda()
             out = model(x)
             _, pred = out.max(1)
             correct += (pred == y).sum().item()
@@ -37,38 +38,45 @@ def evaluate_model(model, dataloader):
 def compute_average_normalized_accuracy(val_accuracies, single_task_accuracies):
     return np.mean([v / s if s != 0 else 0 for v, s in zip(val_accuracies, single_task_accuracies)])
 
-def main():
+def get_checkpoint_path(args, dataset_name):
+    filename_map = {
+        "val": f"{dataset_name}_bestvalacc.pt",
+        "fim": f"{dataset_name}_bestfim.pt",
+        "last": f"{dataset_name}_finetuned.pt"
+    }
+    return os.path.join(args.checkpoints_path, filename_map[args.selection_mode])
 
+def main():
     args = parse_arguments()
-    # 🌍 Portable path setup
+
     project_root = os.path.abspath(args.data_location)
     args.data_location = os.path.join(project_root, "datasets")
-    
+
     if args.save is None:
-        if args.exp_name:
-            args.save = os.path.join(project_root, f"checkpoints_{args.exp_name}")
-        else:
-            args.save = os.path.join(project_root, "checkpoints_default")
-    
+        args.save = os.path.join(project_root, f"checkpoints_{args.exp_name or 'default'}")
+
     args.checkpoints_path = args.save
     args.results_dir = args.save.replace("checkpoints", "results")
     os.makedirs(args.results_dir, exist_ok=True)
 
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
+
+    # Load task vectors using proper checkpoint per selection mode
     task_vectors = [NonLinearTaskVector(
         pretrained_checkpoint=os.path.join(args.checkpoints_path, "pretrained.pt"),
-        finetuned_checkpoint=os.path.join(args.checkpoints_path, f"{ds}_finetuned.pt")
+        finetuned_checkpoint=get_checkpoint_path(args, ds)
     ) for ds in datasets]
 
+    # Load single-task evaluation metrics
     single_task_accuracies = []
     train_accuracies = []
     for dataset in datasets:
-        with open(os.path.join(args.results_dir, f"{dataset}_results.json")) as f:
+        with open(os.path.join(args.results_dir, f"{dataset}_results_{args.selection_mode}.json")) as f:
             res = json.load(f)
         single_task_accuracies.append(res["test_accuracy"])
         train_accuracies.append(res["train_accuracy"])
 
-    # Resume support for alpha sweep
+    # Alpha sweep with resume support
     progress_path = os.path.join(args.results_dir, "alpha_search_progress.json")
     if os.path.exists(progress_path):
         with open(progress_path, "r") as f:
@@ -76,20 +84,19 @@ def main():
     else:
         alpha_results = {}
 
-    
     for alpha in np.arange(0.0, 1.05, 0.05):
         alpha_str = f"{alpha:.2f}"
         if alpha_str in alpha_results:
             print(f"⏩ Skipping alpha = {alpha_str}, already computed.")
             continue
-    
+
         print(f"🔁 Calculating alpha = {alpha_str}")
         combined_vector = sum((tv * alpha for tv in task_vectors))
         blended_encoder = combined_vector.apply_to(
             os.path.join(args.checkpoints_path, "pretrained.pt"), scaling_coef=1.0
         ).cuda()
+
         val_accuracies = []
-    
         for dataset in datasets:
             try:
                 path = resolve_dataset_path(args, dataset)
@@ -108,10 +115,8 @@ def main():
             except Exception as e:
                 print(f"⚠️ Skipping {dataset} during alpha search due to error: {e}")
                 val_accuracies.append(0.0)
-    
+
         avg_score = compute_average_normalized_accuracy(val_accuracies, single_task_accuracies)
-    
-        # Store progress
         alpha_results[alpha_str] = {
             "val_accuracies": val_accuracies,
             "avg_normalized_score": avg_score
@@ -119,11 +124,9 @@ def main():
         with open(progress_path, "w") as f:
             json.dump(alpha_results, f, indent=4)
 
-  
     best_alpha = max(alpha_results.items(), key=lambda x: x[1]["avg_normalized_score"])[0]
     best_alpha = float(best_alpha)
     print(f"🏆 Best alpha: {best_alpha:.2f}")
-
 
     # Final evaluation with best alpha
     combined_vector = sum((tv * best_alpha for tv in task_vectors))
@@ -166,12 +169,12 @@ def main():
 
     with open(os.path.join(args.results_dir, "task_addition_results.json"), "w") as f:
         json.dump(results, f, indent=4)
-    print(f"✅ Task addition results saved to {args.results_dir}/task_addition_results.json")
-
+    print(f"✅ Task addition results saved to task_addition_results.json")
 
     # ✅ Evaluate each individual scaled τₜ: f(θ₀ + α⋅τₜ)
     scaled_results = {
         "alpha": best_alpha,
+        "selection_mode": args.selection_mode,
         "Single-task Acc. (Train)": [],
         "Single-task Acc. (Test)": [],
         "logTr[F̂·] (Train)": []
@@ -210,7 +213,6 @@ def main():
             test_loader = test_ds.test_loader
             test_acc = evaluate_model(model, test_loader)
 
-            # Save required metrics only
             scaled_results["Single-task Acc. (Train)"].append(train_acc)
             scaled_results["Single-task Acc. (Test)"].append(test_acc)
             scaled_results["logTr[F̂·] (Train)"].append(fim_trace)
@@ -218,15 +220,13 @@ def main():
         except Exception as e:
             print(f"⚠️ Error evaluating {dataset} after scaling: {e}")
             for key in scaled_results:
-                if key != "alpha":
+                if key != "alpha" and key != "selection_mode":
                     scaled_results[key].append(0.0)
 
-    # ✅ Save scaled results
     scaled_path = os.path.join(args.results_dir, "scaled_model_results.json")
     with open(scaled_path, "w") as f:
         json.dump(scaled_results, f, indent=4)
     print(f"✅ Scaled model results saved to {scaled_path}")
-
 
 if __name__ == "__main__":
     main()
