@@ -2,12 +2,12 @@ import os
 import json
 import torch
 from tqdm import tqdm
+from datasets.common import get_dataloader, maybe_dictionarize
 from datasets.registry import get_dataset
 from modeling import ImageClassifier, ImageEncoder
 from heads import get_classification_head
 from args import parse_arguments
 from torchvision import transforms
-from datasets.common import maybe_dictionarize
 from utils import train_diag_fim_logtr
 
 def resolve_dataset_path(args, dataset_name):
