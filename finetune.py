@@ -41,9 +41,13 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     original_data_location = args.data_location
     args.data_location = resolve_dataset_path(args, dataset_name)
 
-    checkpoint_path = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
-    if os.path.exists(checkpoint_path):
-        print(f"Checkpoint for {dataset_name} already exists at {checkpoint_path}. Skipping...")
+    # ✅ Check if all Phase 4 checkpoints exist, skip if so
+    checkpoint_finetuned = os.path.join(args.save, f"{dataset_name}_finetuned.pt")
+    checkpoint_valacc = os.path.join(args.save, f"{dataset_name}_bestvalacc.pt")
+    checkpoint_fim = os.path.join(args.save, f"{dataset_name}_bestfim.pt")
+    
+    if all(os.path.exists(p) for p in [checkpoint_finetuned, checkpoint_valacc, checkpoint_fim]):
+        print(f"✅ Skipping {dataset_name} — all Phase 4 checkpoints already exist.")
         args.data_location = original_data_location
         return
 
