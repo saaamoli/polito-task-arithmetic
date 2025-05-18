@@ -10,6 +10,24 @@ from torchvision import transforms
 from datasets.common import maybe_dictionarize
 from utils import train_diag_fim_logtr
 
+def resolve_dataset_path(args, dataset_name):
+    base_path = args.data_location
+    dataset_name_lower = dataset_name.lower()
+    if dataset_name_lower == "dtd":
+        return os.path.join(base_path)  
+    elif dataset_name_lower == "eurosat":
+        return base_path
+    elif dataset_name_lower == "mnist":
+        return os.path.join(base_path, "MNIST", "raw")
+    elif dataset_name_lower == "gtsrb":
+        return os.path.join(base_path, "gtsrb")
+    elif dataset_name_lower == "resisc45":
+        return base_path
+    elif dataset_name_lower == "svhn":
+        return os.path.join(base_path, "svhn")
+    else:
+        raise ValueError(f"Unknown dataset: {dataset_name}")
+
 def evaluate_model(model, dataloader):
     model.eval()
     correct, total = 0, 0
@@ -25,7 +43,7 @@ def evaluate_model(model, dataloader):
 
 def fine_tune_on_dataset(args, dataset_name, num_epochs):
     print(f"\n🔧 Fine-tuning on {dataset_name}")
-    path = os.path.join(args.data_location, dataset_name.lower())
+    path = resolve_dataset_path(args, dataset_name)
 
     preprocess = transforms.Compose([
         transforms.Resize((224, 224)),
