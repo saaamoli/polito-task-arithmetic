@@ -125,6 +125,12 @@ def parse_arguments():
         default=21,
         help="Number of evaluation points used to find optimal coefficient in task arithmetic.",
     )
+    parser.add_argument(
+        "--selection-mode",
+        choices=["val", "fim", "last"],
+        default="last",
+        help="Which checkpoint to use during evaluation: best validation accuracy, best FIM trace, or last epoch."
+    )
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
 
