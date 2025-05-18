@@ -11,40 +11,11 @@ from args import parse_arguments
 from torchvision import transforms
 from utils import train_diag_fim_logtr
 
-
-# Load hyperparameters from hyperparams.json
+# Load hyperparameters
 script_dir = os.path.abspath(os.path.dirname(__file__))
 hyperparams_path = os.path.join(script_dir, "hyperparams.json")
-
-if not os.path.exists(hyperparams_path):
-    raise FileNotFoundError(f"Hyperparameter configuration file not found at {hyperparams_path}")
-
 with open(hyperparams_path, "r") as f:
     baseline_hyperparams = json.load(f)
-
-def load_finetuned_model(args, dataset_name):
-    encoder_checkpoint_path = os.path.join(args.checkpoints_path, f"{dataset_name}_finetuned.pt")
-    head_path = os.path.join(args.checkpoints_path, f"head_{dataset_name}Val.pt")
-
-    if not os.path.exists(encoder_checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {encoder_checkpoint_path}")
-
-    encoder = torch.load(encoder_checkpoint_path, map_location="cuda")
-
-
-
-    if os.path.exists(head_path):
-        print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
-        head = torch.load(head_path, map_location="cuda").cuda()
-
-    else:
-        print(f"⚠️ Classification head for {dataset_name} not found. Generating one...")
-        head = get_classification_head(args, dataset_name).cuda()
-        os.makedirs(os.path.dirname(head_path), exist_ok=True)
-        head.save(head_path)
-        print(f"✅ Generated and saved classification head at {head_path}")
-
-    return ImageClassifier(encoder, head).cuda()
 
 def resolve_dataset_path(args, dataset_name):
     base_path = args.data_location
@@ -58,24 +29,46 @@ def resolve_dataset_path(args, dataset_name):
     else:
         return base_path
 
+def get_encoder_path(args, dataset_name):
+    filename_map = {
+        "val": f"{dataset_name}_bestvalacc.pt",
+        "fim": f"{dataset_name}_bestfim.pt",
+        "last": f"{dataset_name}_finetuned.pt"
+    }
+    filename = filename_map[args.selection_mode]
+    return os.path.join(args.checkpoints_path, filename)
+
+def load_finetuned_model(args, dataset_name):
+    encoder_path = get_encoder_path(args, dataset_name)
+    head_path = os.path.join(args.checkpoints_path, f"head_{dataset_name}Val.pt")
+
+    if not os.path.exists(encoder_path):
+        raise FileNotFoundError(f"❌ Encoder checkpoint not found at {encoder_path}")
+    encoder = torch.load(encoder_path, map_location="cuda")
+
+    if os.path.exists(head_path):
+        print(f"✅ Loading existing classification head for {dataset_name} from {head_path}")
+        head = torch.load(head_path, map_location="cuda").cuda()
+    else:
+        print(f"⚠️ Classification head not found. Regenerating for {dataset_name}...")
+        head = get_classification_head(args, dataset_name).cuda()
+        os.makedirs(os.path.dirname(head_path), exist_ok=True)
+        head.save(head_path)
+
+    return ImageClassifier(encoder, head).cuda()
+
 def evaluate_model(model, dataloader):
     correct, total = 0, 0
     model.eval()
     with torch.no_grad():
         for batch in dataloader:
-            if isinstance(batch, dict):
-                inputs, labels = batch['images'].cuda(), batch['labels'].cuda()
-            elif isinstance(batch, (tuple, list)):
-                inputs, labels = batch[0].cuda(), batch[1].cuda()
-            else:
-                raise TypeError(f"Unexpected batch type: {type(batch)}")
-
+            batch = maybe_dictionarize(batch)
+            inputs, labels = batch["images"].cuda(), batch["labels"].cuda()
             outputs = model(inputs)
             _, preds = torch.max(outputs, 1)
             correct += (preds == labels).sum().item()
             total += labels.size(0)
     return correct / total
-
 
 def save_results(results, save_path):
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -84,9 +77,9 @@ def save_results(results, save_path):
     print(f"✅ Results saved to {save_path}")
 
 def evaluate_and_save(args, dataset_name):
-    save_path = os.path.join(args.results_dir, f"{dataset_name}_results.json")
+    save_path = os.path.join(args.results_dir, f"{dataset_name}_results_{args.selection_mode}.json")
     if os.path.exists(save_path):
-        print(f"✅ Results for {dataset_name} already exist at {save_path}. Skipping evaluation...")
+        print(f"✅ Results already exist at {save_path}. Skipping...")
         return
 
     original_data_location = args.data_location
@@ -115,6 +108,7 @@ def evaluate_and_save(args, dataset_name):
     test_loader = get_dataloader(test_dataset, is_train=False, args=args)
 
     model = load_finetuned_model(args, dataset_name)
+
     train_acc = evaluate_model(model, train_loader)
     val_acc = evaluate_model(model, val_loader)
     test_acc = evaluate_model(model, test_loader)
@@ -123,46 +117,38 @@ def evaluate_and_save(args, dataset_name):
     print(f"✅ Validation Accuracy for {dataset_name}: {val_acc:.4f}")
     print(f"✅ Test Accuracy for {dataset_name}: {test_acc:.4f}")
 
-    fim_dataset = get_dataset(dataset_name, preprocess, resolve_dataset_path(args, dataset_name), args.batch_size)
-    fim_loader = get_dataloader(fim_dataset, is_train=True, args=args)
-
-    criterion = torch.nn.CrossEntropyLoss()
-    fim_log_trace = train_diag_fim_logtr(args, model, dataset_name)
-    print(f"📊 Log Tr[FIM] for {dataset_name}: {fim_log_trace:.4f}")
+    fim_trace = train_diag_fim_logtr(args, model, dataset_name)
+    print(f"📊 logTr[FIM] for {dataset_name}: {fim_trace:.4f}")
 
     results = {
         "dataset": dataset_name,
+        "selection_mode": args.selection_mode,
         "train_accuracy": train_acc,
         "validation_accuracy": val_acc,
         "test_accuracy": test_acc,
-        "fim_log_trace": fim_log_trace
+        "fim_log_trace": fim_trace
     }
+
     save_results(results, save_path)
     args.data_location = original_data_location
 
 def main():
     args = parse_arguments()
-    
-    # 🌐 Portable path configuration
+
     project_root = os.path.abspath(args.data_location)
     args.data_location = os.path.join(project_root, "datasets")
-    
+
     if args.save is None:
-        if args.exp_name is not None:
-            args.save = os.path.join(project_root, f"checkpoints_{args.exp_name}")
-        else:
-            args.save = os.path.join(project_root, "checkpoints_default")
-    
+        args.save = os.path.join(project_root, f"checkpoints_{args.exp_name or 'default'}")
+
     args.checkpoints_path = args.save
     args.results_dir = args.save.replace("checkpoints", "results")
     os.makedirs(args.results_dir, exist_ok=True)
 
-
     datasets = ["DTD", "EuroSAT", "GTSRB", "MNIST", "RESISC45", "SVHN"]
     for dataset_name in datasets:
-        print(f"\n--- Evaluating {dataset_name} ---")
+        print(f"\n--- Evaluating {dataset_name} with {args.selection_mode} checkpoint ---")
         args.batch_size = baseline_hyperparams[dataset_name]["batch_size"]
-        print(f"Using batch size {args.batch_size} for {dataset_name}")
         evaluate_and_save(args, dataset_name)
 
 if __name__ == "__main__":
