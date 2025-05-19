@@ -46,10 +46,20 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     checkpoint_valacc = os.path.join(args.save, f"{dataset_name}_bestvalacc.pt")
     checkpoint_fim = os.path.join(args.save, f"{dataset_name}_bestfim.pt")
     
-    if all(os.path.exists(p) for p in [checkpoint_finetuned, checkpoint_valacc, checkpoint_fim]):
-        print(f"✅ Skipping {dataset_name} — all Phase 4 checkpoints already exist.")
+    # Skip dataset only if required checkpoints already exist
+    skip = False
+    if args.finetune_mode == "valacc":
+        skip = os.path.exists(checkpoint_valacc) and os.path.exists(checkpoint_finetuned)
+    elif args.finetune_mode == "fim":
+        skip = os.path.exists(checkpoint_fim) and os.path.exists(checkpoint_finetuned)
+    elif args.finetune_mode == "both":
+        skip = all(os.path.exists(p) for p in [checkpoint_finetuned, checkpoint_valacc, checkpoint_fim])
+    
+    if skip:
+        print(f"✅ Skipping {dataset_name} — already completed for mode '{args.finetune_mode}'.")
         args.data_location = original_data_location
         return
+
 
     encoder = ImageEncoder(args).to(args.device)
 
