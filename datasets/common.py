@@ -60,6 +60,21 @@ def maybe_dictionarize(batch):
 
     return batch
 
+def balance_dataset(dataset):
+    """Subsample each class to the size of the smallest class."""
+    class_to_indices = collections.defaultdict(list)
+    for idx, sample in enumerate(dataset):
+        label = sample['labels'] if isinstance(sample, dict) else sample[1]
+        class_to_indices[label].append(idx)
+
+    min_len = min(len(indices) for indices in class_to_indices.values())
+
+    balanced_indices = []
+    for indices in class_to_indices.values():
+        balanced_indices.extend(random.sample(indices, min_len))
+
+    print(f"🔄 Balanced dataset to {min_len} samples per class, total: {len(balanced_indices)}")
+    return torch.utils.data.Subset(dataset, balanced_indices)
 
 def get_features_helper(image_encoder, dataloader, device):
     all_data = collections.defaultdict(list)
@@ -136,4 +151,9 @@ def get_dataloader(dataset, is_train, args, image_encoder=None):
         dataloader = DataLoader(feature_dataset, batch_size=args.batch_size, shuffle=is_train)
     else:
         dataloader = dataset.train_loader if is_train else dataset.test_loader
+
+    if is_train and getattr(args, "balanced", False):
+        print("⚖️ Balancing training data...")
+        dataset.train_dataset = balance_dataset(dataset.train_dataset)
+
     return dataloader
