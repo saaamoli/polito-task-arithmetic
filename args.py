@@ -137,6 +137,11 @@ def parse_arguments():
         default="both",
         help="Which metric to track and checkpoint: best validation accuracy, best FIM trace, or both."
     )
+    parser.add_argument(
+    "--balanced",
+    action="store_true",
+    help="If set, balances the training data by subsampling all classes to the smallest class size."
+    )
 
     parsed_args = parser.parse_args()
     parsed_args.device = "cuda" if torch.cuda.is_available() else "cpu"
