@@ -70,11 +70,16 @@ def balance_dataset(dataset):
     min_len = min(len(indices) for indices in class_to_indices.values())
 
     balanced_indices = []
-    for indices in class_to_indices.values():
-        balanced_indices.extend(random.sample(indices, min_len))
+    for label, indices in class_to_indices.items():
+        sampled = random.sample(indices, min_len)
+        balanced_indices.extend(sampled)
+        print(f"📊 Class {label}: reduced from {len(indices)} to {len(sampled)}")
 
-    print(f"🔄 Balanced dataset to {min_len} samples per class, total: {len(balanced_indices)}")
+    print(f"🔄 Total balanced dataset size: {len(balanced_indices)} samples "
+          f"({min_len} per class × {len(class_to_indices)} classes)")
+
     return torch.utils.data.Subset(dataset, balanced_indices)
+
 
 def get_features_helper(image_encoder, dataloader, device):
     all_data = collections.defaultdict(list)
