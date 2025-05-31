@@ -46,7 +46,7 @@ def fine_tune_on_dataset(args, dataset_name, num_epochs, learning_rate, batch_si
     checkpoint_valacc = os.path.join(args.save, f"{dataset_name}_bestvalacc.pt")
     checkpoint_fim = os.path.join(args.save, f"{dataset_name}_bestfim.pt")
     
-   completion_flag = os.path.join(args.results_dir, f"finetune_complete_{dataset_name}.txt")
+    completion_flag = os.path.join(args.results_dir, f"finetune_complete_{dataset_name}.txt")
     if os.path.exists(completion_flag):
         print(f"✅ Skipping {dataset_name} — already marked as complete.")
         args.data_location = original_data_location
