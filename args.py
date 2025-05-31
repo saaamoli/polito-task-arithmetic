@@ -132,11 +132,12 @@ def parse_arguments():
         help="Which checkpoint to use during evaluation: best validation accuracy, best FIM trace, or last epoch."
     )
     parser.add_argument(
-        "--finetune-mode",
-        choices=["valacc", "fim", "both"],
-        default="both",
-        help="Which metric to track and checkpoint: best validation accuracy, best FIM trace, or both."
+    "--finetune-mode",
+    choices=["valacc", "fim", "both", "none"],
+    default="both",
+    help="Which metric to track and checkpoint: best validation accuracy, best FIM trace, both, or none (just save last epoch)."
     )
+    
     parser.add_argument(
     "--balanced",
     action="store_true",
