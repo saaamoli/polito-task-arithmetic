@@ -133,43 +133,49 @@ def main():
     blended_encoder = combined_vector.apply_to(
         os.path.join(args.checkpoints_path, "pretrained.pt"), scaling_coef=1.0
     ).cuda()
-    results = {"alpha": best_alpha}
 
-    for mode in ["train", "test"]:
-        absolute_acc, normalized_acc, fim_traces = [], [], []
-        for i, dataset in enumerate(datasets):
-            try:
-                path = resolve_dataset_path(args, dataset)
-                preprocess = transforms.Compose([
-                    transforms.Resize((224, 224)),
-                    transforms.Grayscale(3) if dataset.lower() == "mnist" else transforms.Lambda(lambda x: x),
-                    transforms.ToTensor(),
-                    transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-                ])
-                ds = get_dataset(dataset, preprocess, path, args.batch_size)
-                loader = ds.train_loader if mode == "train" else ds.test_loader
-                head = get_classification_head(args, dataset).cuda()
-                model = ImageClassifier(blended_encoder, head).cuda()
-                acc = evaluate_model(model, loader)
-                absolute_acc.append(acc)
-                base_acc = train_accuracies[i] if mode == "train" else single_task_accuracies[i]
-                normalized_acc.append(acc / base_acc if base_acc != 0 else 0)
-                fim = train_diag_fim_logtr(args, model, dataset)
-                fim_traces.append(fim)
-            except Exception as e:
-                print(f"⚠️ Skipping {dataset} in {mode} mode due to error: {e}")
-                absolute_acc.append(0.0)
-                normalized_acc.append(0.0)
-                fim_traces.append(0.0)
+    task_addition_path = os.path.join(args.results_dir, "task_addition_results.json")
+    if os.path.exists(task_addition_path):
+        print("⏩ Skipping task addition — already completed.")
+    else:
 
-        results[f"absolute_{mode}_accuracy"] = absolute_acc
-        results[f"normalized_{mode}_accuracy"] = normalized_acc
-        if mode == "train":
-            results["fim_log_traces_train"] = fim_traces
-
-    with open(os.path.join(args.results_dir, "task_addition_results.json"), "w") as f:
-        json.dump(results, f, indent=4)
-    print(f"✅ Task addition results saved to task_addition_results.json")
+        results = {"alpha": best_alpha}
+    
+        for mode in ["train", "test"]:
+            absolute_acc, normalized_acc, fim_traces = [], [], []
+            for i, dataset in enumerate(datasets):
+                try:
+                    path = resolve_dataset_path(args, dataset)
+                    preprocess = transforms.Compose([
+                        transforms.Resize((224, 224)),
+                        transforms.Grayscale(3) if dataset.lower() == "mnist" else transforms.Lambda(lambda x: x),
+                        transforms.ToTensor(),
+                        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+                    ])
+                    ds = get_dataset(dataset, preprocess, path, args.batch_size)
+                    loader = ds.train_loader if mode == "train" else ds.test_loader
+                    head = get_classification_head(args, dataset).cuda()
+                    model = ImageClassifier(blended_encoder, head).cuda()
+                    acc = evaluate_model(model, loader)
+                    absolute_acc.append(acc)
+                    base_acc = train_accuracies[i] if mode == "train" else single_task_accuracies[i]
+                    normalized_acc.append(acc / base_acc if base_acc != 0 else 0)
+                    fim = train_diag_fim_logtr(args, model, dataset)
+                    fim_traces.append(fim)
+                except Exception as e:
+                    print(f"⚠️ Skipping {dataset} in {mode} mode due to error: {e}")
+                    absolute_acc.append(0.0)
+                    normalized_acc.append(0.0)
+                    fim_traces.append(0.0)
+    
+            results[f"absolute_{mode}_accuracy"] = absolute_acc
+            results[f"normalized_{mode}_accuracy"] = normalized_acc
+            if mode == "train":
+                results["fim_log_traces_train"] = fim_traces
+    
+        with open(os.path.join(args.results_dir, "task_addition_results.json"), "w") as f:
+            json.dump(results, f, indent=4)
+        print(f"✅ Task addition results saved to task_addition_results.json")
 
     # ✅ Evaluate each individual scaled τₜ: f(θ₀ + α⋅τₜ)
     scaled_results = {
